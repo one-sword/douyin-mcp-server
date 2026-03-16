@@ -7,8 +7,11 @@
   "scripts": {
     "build": "cd mcp-server && npm run build",
     "start": "cd mcp-server && npm start",
-    "test": "node examples/simple-upload.js",
-    "dev": "cd mcp-server && npm run dev"
+    "test": "cd mcp-server && npm test",
+    "dev": "cd mcp-server && npm run dev",
+    "lint": "cd mcp-server && npm run lint",
+    "lint:fix": "cd mcp-server && npm run lint:fix",
+    "format": "cd mcp-server && npm run format"
   },
   "keywords": [
     "douyin",
@@ -19,12 +22,5 @@
     "automation"
   ],
   "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "puppeteer": "^23.11.1"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.6",
-    "typescript": "^5.7.3"
-  }
+  "license": "MIT"
 }

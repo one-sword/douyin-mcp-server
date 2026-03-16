@@ -6,6 +6,24 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// 配置常量
+export const CONFIG = {
+  // 超时时间 (毫秒)
+  TIMEOUTS: {
+    LOGIN_POLL_INTERVAL: 5000,      // 登录状态轮询间隔
+    COOKIE_VALIDATION_WAIT: 3000,   // Cookie 验证等待时间
+    PAGE_LOAD_WAIT: 3000,           // 页面加载等待时间
+    MIN_UPLOAD_WAIT: 15000,         // 最小上传等待时间
+    FORM_SUBMIT_WAIT: 2000,         // 表单提交后等待时间
+    PUBLISH_WAIT: 3000,             // 发布操作等待时间
+    NAVIGATION_TIMEOUT: 30000,      // 页面导航超时
+    FILE_INPUT_TIMEOUT: 10000,      // 文件输入框等待超时
+    TITLE_INPUT_TIMEOUT: 5000,      // 标题输入框等待超时
+  },
+  // 上传等待时间计算 (基于文件大小)
+  UPLOAD_WAIT_MULTIPLIER: 1024,     // fileSize / UPLOAD_WAIT_MULTIPLIER = 额外等待毫秒数
+} as const;
+
 interface LoginResult {
   success: boolean;
   user?: string;
@@ -53,38 +71,38 @@ export class DouyinUploader {
 
   async login(headless: boolean = false, timeout: number = 180000): Promise<LoginResult> {
     let browser: Browser | null = null;
-    
+
     try {
       browser = await this.launchBrowser(headless);
       const page = await browser.newPage();
-      
+
       // 访问抖音创作者平台
       await page.goto('https://creator.douyin.com', {
         waitUntil: 'domcontentloaded',
-        timeout: 30000
+        timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
       });
-      
+
       // 等待用户登录
       console.error('Waiting for user login...');
       const startTime = Date.now();
-      
+
       while (Date.now() - startTime < timeout) {
-        await new Promise(r => setTimeout(r, 5000));
-        
+        await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.LOGIN_POLL_INTERVAL));
+
         const currentUrl = page.url();
-        const isLoggedIn = !currentUrl.includes('/login') && 
+        const isLoggedIn = !currentUrl.includes('/login') &&
                           !currentUrl.includes('passport') &&
-                          (currentUrl.includes('creator.douyin.com/creator') || 
+                          (currentUrl.includes('creator.douyin.com/creator') ||
                            currentUrl.includes('creator.douyin.com/home'));
-        
+
         if (isLoggedIn) {
           // 获取用户信息
           const user = await this.getUserInfo(page);
-          
+
           // 保存cookies
           const cookies = await page.cookies();
           await fs.writeFile(this.cookiesPath, JSON.stringify(cookies, null, 2));
-          
+
           await browser.close();
           return {
             success: true,
@@ -93,13 +111,13 @@ export class DouyinUploader {
           };
         }
       }
-      
+
       await browser.close();
       return {
         success: false,
         error: 'Login timeout'
       };
-      
+
     } catch (error) {
       if (browser) await browser.close();
       return {
@@ -111,39 +129,39 @@ export class DouyinUploader {
 
   async checkLogin(headless: boolean = true): Promise<CheckLoginResult> {
     let browser: Browser | null = null;
-    
+
     try {
       // 检查cookies文件
       const cookiesData = await fs.readFile(this.cookiesPath, 'utf-8');
       const cookies = JSON.parse(cookiesData);
-      
+
       if (!cookies || cookies.length === 0) {
         return { isValid: false };
       }
-      
+
       // 测试cookies
       browser = await this.launchBrowser(headless);
       const page = await browser.newPage();
       await page.setCookie(...cookies);
-      
+
       await page.goto('https://creator.douyin.com', {
         waitUntil: 'networkidle2',
-        timeout: 30000
+        timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
       });
-      
-      await new Promise(r => setTimeout(r, 3000));
-      
+
+      await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.COOKIE_VALIDATION_WAIT));
+
       const currentUrl = page.url();
       const isValid = !currentUrl.includes('login');
-      
+
       let user = undefined;
       if (isValid) {
         user = await this.getUserInfo(page);
       }
-      
+
       await browser.close();
       return { isValid, user };
-      
+
     } catch (error) {
       if (browser) await browser.close();
       return { isValid: false };
@@ -152,70 +170,75 @@ export class DouyinUploader {
 
   async uploadVideo(params: UploadParams): Promise<UploadResult> {
     let browser: Browser | null = null;
-    
+
     try {
       // 验证视频文件
       const videoStats = await fs.stat(params.videoPath);
       if (!videoStats.isFile()) {
         throw new Error('Video file not found');
       }
-      
+
       // 加载cookies
       const cookiesData = await fs.readFile(this.cookiesPath, 'utf-8');
       const cookies = JSON.parse(cookiesData);
-      
+
       if (!cookies || cookies.length === 0) {
         throw new Error('No login cookies found. Please login first.');
       }
-      
+
       // 启动浏览器
       browser = await this.launchBrowser(params.headless || false);
       const page = await browser.newPage();
-      
+
       // 设置cookies
       await page.setCookie(...cookies);
-      
+
       // 访问上传页面
       await page.goto('https://creator.douyin.com/creator-micro/content/upload', {
         waitUntil: 'networkidle2',
-        timeout: 30000
+        timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
       });
-      
-      await new Promise(r => setTimeout(r, 3000));
-      
+
+      await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
+
       // 检查登录状态
       if (page.url().includes('login')) {
         await browser.close();
         throw new Error('Login expired. Please login again.');
       }
-      
+
       // 上传视频
-      const fileInput = await page.waitForSelector('input[type="file"]', { 
-        timeout: 10000,
-        visible: false 
+      const fileInput = await page.waitForSelector('input[type="file"]', {
+        timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT,
+        visible: false
       });
-      
+
       if (!fileInput) {
         throw new Error('Upload input not found');
       }
-      
+
       await fileInput.uploadFile(params.videoPath);
-      
+
       // 等待上传
       const fileSize = videoStats.size;
-      const waitTime = Math.max(15000, fileSize / 1024); // 至少15秒
+      const waitTime = Math.max(CONFIG.TIMEOUTS.MIN_UPLOAD_WAIT, fileSize / CONFIG.UPLOAD_WAIT_MULTIPLIER);
       await new Promise(r => setTimeout(r, waitTime));
-      
+
       // 填写标题
       try {
-        await page.waitForSelector('input[placeholder*="标题"]', { timeout: 5000 });
+        await page.waitForSelector('input[placeholder*="标题"]', { timeout: CONFIG.TIMEOUTS.TITLE_INPUT_TIMEOUT });
         await page.click('input[placeholder*="标题"]');
-        await page.keyboard.down('Control');
+        // 检测操作系统，使用正确的修饰键
+        const isMac = process.platform === 'darwin';
+        const modifierKey = isMac ? 'Meta' : 'Control';
+        await page.keyboard.down(modifierKey);
         await page.keyboard.press('A');
-        await page.keyboard.up('Control');
+        await page.keyboard.up(modifierKey);
         await page.keyboard.type(params.title);
-      } catch {
-        // 备用方法
+      } catch (titleError) {
+        // 备用方法：直接操作 DOM
+        console.error('Title input via selector failed, trying fallback method:',
+          titleError instanceof Error ? titleError.message : String(titleError));
         await page.evaluate((title) => {
           const input = document.querySelector('input[type="text"]');
           if (input) {
@@ -224,7 +247,7 @@ export class DouyinUploader {
           }
         }, params.title);
       }
-      
+
       // 填写描述
       if (params.description) {
         try {
@@ -233,9 +256,12 @@ export class DouyinUploader {
             await descInput.click();
             await page.keyboard.type(params.description);
           }
-        } catch {}
+        } catch (descError) {
+          console.error('Failed to fill description:',
+            descError instanceof Error ? descError.message : String(descError));
+        }
       }
-      
+
       // 添加标签
       if (params.tags && params.tags.length > 0) {
         const tagText = params.tags.map(tag => `#${tag}`).join(' ');
@@ -245,11 +271,14 @@ export class DouyinUploader {
             await descInput.click();
             await page.keyboard.type(' ' + tagText);
           }
-        } catch {}
+        } catch (tagError) {
+          console.error('Failed to add tags:',
+            tagError instanceof Error ? tagError.message : String(tagError));
+        }
       }
-      
-      await new Promise(r => setTimeout(r, 2000));
-      
+
+      await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+
       // 发布
       let published = false;
       if (params.autoPublish !== false) {
@@ -259,26 +288,26 @@ export class DouyinUploader {
             const text = btn.textContent?.trim() || '';
             return text === '发布' || text === '立即发布';
           });
-          
+
           if (publishBtn && !publishBtn.disabled) {
             publishBtn.click();
             return true;
           }
           return false;
         });
-        
+
         if (published) {
-          await new Promise(r => setTimeout(r, 3000));
-          
+          await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
+
           // 检查是否出现短信验证
           const hasSmsVerification = await page.evaluate(() => {
             const text = document.body.innerText || '';
             return text.includes('短信验证') || text.includes('验证码') || text.includes('手机验证');
           });
-          
+
           if (hasSmsVerification) {
             console.error('\n📱 检测到短信验证页面');
-            
+
             // 尝试点击发送验证码按钮
             const smsSent = await page.evaluate(() => {
               const buttons = Array.from(document.querySelectorAll('button'));
@@ -286,32 +315,32 @@ export class DouyinUploader {
                 const text = btn.textContent?.trim() || '';
                 return text.includes('发送') || text.includes('获取验证码') || text === '验证';
               });
-              
+
               if (sendBtn && !sendBtn.disabled) {
                 sendBtn.click();
                 return true;
               }
               return false;
             });
-            
+
             if (smsSent) {
               console.error('✅ 已发送验证码到您的手机');
               console.error('\n请输入收到的验证码：');
-              
+
               // 等待用户输入验证码
               const readline = await import('readline');
               const rl = readline.createInterface({
                 input: process.stdin,
                 output: process.stdout
               });
-              
+
               const verifyCode = await new Promise<string>((resolve) => {
                 rl.question('验证码: ', (answer) => {
                   rl.close();
                   resolve(answer.trim());
                 });
               });
-              
+
               // 输入验证码
               const codeInputs = await page.$$('input[type="text"], input[type="tel"], input[placeholder*="验证码"]');
               if (codeInputs.length > 0) {
@@ -325,7 +354,7 @@ export class DouyinUploader {
                   await codeInputs[0].type(verifyCode);
                 }
               }
-              
+
               // 点击确认按钮
               await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button'));
@@ -333,15 +362,15 @@ export class DouyinUploader {
                   const text = btn.textContent?.trim() || '';
                   return text.includes('确认') || text.includes('确定') || text.includes('提交') || text === '验证';
                 });
-                
+
                 if (confirmBtn && !confirmBtn.disabled) {
                   confirmBtn.click();
                 }
               });
-              
+
               console.error('✅ 验证码已提交');
-              await new Promise(r => setTimeout(r, 3000));
-              
+              await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
+
               // 再次尝试发布
               await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button'));
@@ -349,7 +378,7 @@ export class DouyinUploader {
                   const text = btn.textContent?.trim() || '';
                   return text === '发布' || text === '立即发布' || text.includes('确认发布');
                 });
-                
+
                 if (publishBtn && !publishBtn.disabled) {
                   publishBtn.click();
                 }
@@ -368,20 +397,20 @@ export class DouyinUploader {
               }
             });
           }
-          
-          await new Promise(r => setTimeout(r, 3000));
+
+          await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
         }
       }
-      
+
       await browser.close();
-      
+
       return {
         success: true,
         title: params.title,
         published,
         status: published ? 'Published' : 'Draft saved'
       };
-      
+
     } catch (error) {
       if (browser) await browser.close();
       return {
@@ -395,15 +424,16 @@ export class DouyinUploader {
     try {
       const cookiesData = await fs.readFile(this.cookiesPath, 'utf-8');
       const cookies = JSON.parse(cookiesData);
-      
+
       const stats = await fs.stat(this.cookiesPath);
-      
+
       return {
         exists: true,
         count: cookies.length,
         created: stats.mtime.toLocaleString()
       };
-    } catch {
+    } catch (error) {
+      // Cookie 文件不存在是正常情况，不需要记录错误
       return { exists: false };
     }
   }
@@ -411,11 +441,23 @@ export class DouyinUploader {
   async clearData(): Promise<void> {
     try {
       await fs.unlink(this.cookiesPath);
-    } catch {}
-    
+    } catch (error) {
+      // 文件不存在时忽略错误
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('Failed to delete cookies file:',
+          error instanceof Error ? error.message : String(error));
+      }
+    }
+
     try {
       await fs.rm(this.userDataDir, { recursive: true, force: true });
-    } catch {}
+    } catch (error) {
+      // 目录不存在时忽略错误
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('Failed to delete user data directory:',
+          error instanceof Error ? error.message : String(error));
+      }
+    }
   }
 
   private async launchBrowser(headless: boolean): Promise<Browser> {
@@ -435,11 +477,11 @@ export class DouyinUploader {
       userDataDir: this.userDataDir,
       ignoreDefaultArgs: ['--enable-automation']
     });
-    
+
     // 设置默认权限
     if (!headless) {
       const context = browser.defaultBrowserContext();
-      
+
       // 覆盖所有权限为允许
       await context.overridePermissions('https://creator.douyin.com', [
         'geolocation',
@@ -448,16 +490,22 @@ export class DouyinUploader {
         'microphone',
         'clipboard-read',
         'clipboard-write'
-      ]).catch(() => {});
-      
+      ]).catch((error) => {
+        console.error('Failed to override permissions for creator.douyin.com:',
+          error instanceof Error ? error.message : String(error));
+      });
+
       await context.overridePermissions('https://www.douyin.com', [
         'geolocation',
         'notifications',
         'camera',
         'microphone'
-      ]).catch(() => {});
+      ]).catch((error) => {
+        console.error('Failed to override permissions for www.douyin.com:',
+          error instanceof Error ? error.message : String(error));
+      });
     }
-    
+
     return browser;
   }
 
@@ -473,7 +521,9 @@ export class DouyinUploader {
         }
         return 'User';
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to get user info:',
+        error instanceof Error ? error.message : String(error));
       return 'User';
     }
   }

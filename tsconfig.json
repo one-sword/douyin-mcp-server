@@ -7,13 +7,14 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*"],
+  "references": [
+    { "path": "./mcp-server" }
+  ],
+  "include": [],
   "exclude": ["node_modules", "dist"]
 }

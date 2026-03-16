@@ -7,11 +7,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { DouyinUploader } from './douyin-uploader.js';
 import { z } from 'zod';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // 参数验证模式
 const LoginArgsSchema = z.object({
