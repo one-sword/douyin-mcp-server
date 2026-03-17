@@ -1,15 +1,30 @@
 ---
 name: douyin
 description: 抖音视频上传工具。支持登录抖音账号、上传视频、管理登录状态。当用户需要上传视频到抖音、登录抖音、检查抖音登录状态时使用。
-license: MIT
-compatibility: 需要 Node.js 18+，Chrome/Chromium 浏览器
-allowed-tools: Bash(node *) Bash(npx *) Bash(cd *)
+version: 2.0.0
+allowed-tools: Bash(node *) Bash(npx *) Bash(cd *) Bash(git clone *)
 metadata:
-  author: lancelin111
-  version: "2.0.0"
-  repository: https://github.com/lancelin111/douyin-mcp-server
-  source: https://github.com/lancelin111/douyin-mcp-server
-  homepage: https://github.com/lancelin111/douyin-mcp-server
+  openclaw:
+    requires:
+      bins:
+        - node
+        - npm
+        - npx
+        - git
+      anyBins:
+        - chromium
+        - google-chrome
+        - chrome
+    install:
+      - kind: node
+        package: tsx
+        bins: [tsx]
+    homepage: https://github.com/lancelin111/douyin-mcp-server
+    emoji: "\U0001F3AC"
+    os:
+      - macos
+      - linux
+      - windows
 ---
 
 # 抖音视频上传工具
