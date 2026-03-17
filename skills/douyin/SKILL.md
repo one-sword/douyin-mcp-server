@@ -36,6 +36,12 @@ metadata:
 **This skill is self-contained — all code is bundled, no external repo cloning needed.**
 此 skill 为自包含结构，所有代码已打包在内，无需克隆外部仓库。
 
+## Important: First Upload Requires SMS Verification | 重要提示：首次上传需要短信验证
+
+> **After logging in, your first video upload will require SMS verification.** Enter the verification code when prompted. After this one-time verification, all subsequent uploads will be fully automated.
+>
+> **登录成功后，第一次上传视频需要短信验证。** 按提示输入验证码即可。完成一次验证后，之后的上传将完全自动化，无需再次验证。
+
 ## Transparency Statement | 透明度声明
 
 ### Data Storage | 数据存储
