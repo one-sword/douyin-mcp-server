@@ -33,6 +33,28 @@ metadata:
 
 **源代码仓库**: https://github.com/lancelin111/douyin-mcp-server
 
+## 透明度声明
+
+### 数据存储
+- **Cookie 文件**: `{baseDir}/douyin-cookies.json` - 存储抖音登录凭证，仅在本地保存，不会上传到任何服务器
+- **浏览器数据**: `{baseDir}/puppeteer-user-data/` - Puppeteer 浏览器会话数据
+
+### 网络访问
+本工具仅访问以下抖音官方域名：
+- `https://creator.douyin.com` - 抖音创作者平台（登录、上传）
+- `https://www.douyin.com` - 抖音主站（权限验证）
+
+**不会访问任何第三方服务器，不会上传或泄露您的登录凭证。**
+
+### 代码行为
+1. **login.ts**: 打开浏览器 → 导航到抖音登录页 → 等待用户手动登录 → 保存 Cookie 到本地文件
+2. **upload.ts**: 读取本地 Cookie → 自动登录 → 上传指定视频文件 → 填写标题/描述/标签 → 发布
+3. **manage.ts**: 读取/验证/删除本地 Cookie 文件
+
+### 依赖审计
+- 主要依赖: `puppeteer`（浏览器自动化）、`@modelcontextprotocol/sdk`（MCP 协议）、`zod`（参数验证）
+- 完整依赖列表: [package.json](https://github.com/lancelin111/douyin-mcp-server/blob/main/mcp-server/package.json)
+
 ## 安装
 
 首次使用需要先克隆项目并安装依赖：
