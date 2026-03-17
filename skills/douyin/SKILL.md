@@ -1,24 +1,22 @@
 ---
 name: douyin
 description: 抖音视频上传工具。支持登录抖音账号、上传视频、管理登录状态。当用户需要上传视频到抖音、登录抖音、检查抖音登录状态时使用。
-version: 2.0.0
-allowed-tools: Bash(node *) Bash(npx *) Bash(cd *) Bash(git clone *)
+version: 2.1.0
+allowed-tools: Bash(node *) Bash(npm *)
 metadata:
   openclaw:
     requires:
       bins:
         - node
         - npm
-        - npx
-        - git
       anyBins:
         - chromium
         - google-chrome
         - chrome
     install:
       - kind: node
-        package: tsx
-        bins: [tsx]
+        package: puppeteer
+        bins: []
     homepage: https://github.com/lancelin111/douyin-mcp-server
     emoji: "\U0001F3AC"
     os:
@@ -31,13 +29,13 @@ metadata:
 
 自动化上传视频到抖音创作者平台，支持登录、上传和账号管理。
 
-**源代码仓库**: https://github.com/lancelin111/douyin-mcp-server
+**此 skill 为自包含结构，所有代码已打包在内，无需克隆外部仓库。**
 
 ## 透明度声明
 
 ### 数据存储
-- **Cookie 文件**: `{baseDir}/douyin-cookies.json` - 存储抖音登录凭证，仅在本地保存，不会上传到任何服务器
-- **浏览器数据**: `{baseDir}/puppeteer-user-data/` - Puppeteer 浏览器会话数据
+- **Cookie 文件**: `{baseDir}/douyin-cookies.json` - 存储抖音登录凭证，仅在本地保存
+- **浏览器数据**: `{baseDir}/chrome-user-data/` - Puppeteer 浏览器会话数据
 
 ### 网络访问
 本工具仅访问以下抖音官方域名：
@@ -47,34 +45,30 @@ metadata:
 **不会访问任何第三方服务器，不会上传或泄露您的登录凭证。**
 
 ### 代码行为
-1. **login.ts**: 打开浏览器 → 导航到抖音登录页 → 等待用户手动登录 → 保存 Cookie 到本地文件
-2. **upload.ts**: 读取本地 Cookie → 自动登录 → 上传指定视频文件 → 填写标题/描述/标签 → 发布
-3. **manage.ts**: 读取/验证/删除本地 Cookie 文件
+1. **login.js**: 打开浏览器 → 导航到抖音登录页 → 等待用户手动登录 → 保存 Cookie 到本地文件
+2. **upload.js**: 读取本地 Cookie → 自动登录 → 上传指定视频文件 → 填写标题/描述/标签 → 发布
+3. **manage.js**: 读取/验证/删除本地 Cookie 文件
 
-### 依赖审计
-- 主要依赖: `puppeteer`（浏览器自动化）、`@modelcontextprotocol/sdk`（MCP 协议）、`zod`（参数验证）
-- 完整依赖列表: [package.json](https://github.com/lancelin111/douyin-mcp-server/blob/main/mcp-server/package.json)
+### 依赖
+- **puppeteer**: 浏览器自动化（Chromium）
+- 完整依赖: 见本目录 `package.json`
 
 ## 安装
 
-首次使用需要先克隆项目并安装依赖：
+首次使用需要安装依赖：
 
 ```bash
-# 克隆源代码（{baseDir} 即为克隆后的目录）
-git clone https://github.com/lancelin111/douyin-mcp-server.git {baseDir}
-
-# 安装依赖并构建
-cd {baseDir} && npm install && cd mcp-server && npm install && npm run build
+cd {baseDir} && npm install
 ```
 
-> **安全提示**: 建议在安装前审查 [package.json](https://github.com/lancelin111/douyin-mcp-server/blob/main/mcp-server/package.json) 和 [脚本源码](https://github.com/lancelin111/douyin-mcp-server/tree/main/scripts)。
+> **说明**: 仅安装 puppeteer 依赖，无需克隆外部仓库。
 
 ## 功能一：登录抖音
 
 登录抖音创作者平台，保存登录凭证（Cookie）。
 
 ```bash
-cd {baseDir} && npx tsx scripts/login.ts
+cd {baseDir} && node scripts/login.js
 ```
 
 **流程：**
@@ -94,7 +88,7 @@ Cookies saved: 25
 上传视频到抖音，支持设置标题、描述和标签。
 
 ```bash
-cd {baseDir} && npx tsx scripts/upload.ts --video "视频路径" --title "视频标题"
+cd {baseDir} && node scripts/upload.js --video "视频路径" --title "视频标题"
 ```
 
 **参数：**
@@ -109,7 +103,7 @@ cd {baseDir} && npx tsx scripts/upload.ts --video "视频路径" --title "视频
 
 **完整示例：**
 ```bash
-cd {baseDir} && npx tsx scripts/upload.ts \
+cd {baseDir} && node scripts/upload.js \
   --video "/Users/xxx/video.mp4" \
   --title "我的视频" \
   --description "视频描述" \
@@ -129,25 +123,25 @@ Status: Published
 
 ### 检查登录是否有效
 ```bash
-cd {baseDir} && npx tsx scripts/manage.ts check
+cd {baseDir} && node scripts/manage.js check
 ```
 
 ### 查看 Cookie 信息
 ```bash
-cd {baseDir} && npx tsx scripts/manage.ts info
+cd {baseDir} && node scripts/manage.js info
 ```
 
 ### 清除登录数据
 ```bash
-cd {baseDir} && npx tsx scripts/manage.ts clear
+cd {baseDir} && node scripts/manage.js clear
 ```
 
 ## 常见问题
 
 **Q: 提示 "Login expired"？**
 ```bash
-cd {baseDir} && npx tsx scripts/manage.ts clear
-cd {baseDir} && npx tsx scripts/login.ts
+cd {baseDir} && node scripts/manage.js clear
+cd {baseDir} && node scripts/login.js
 ```
 
 **Q: 上传时遇到短信验证？**
