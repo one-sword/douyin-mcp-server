@@ -353,65 +353,71 @@ export class DouyinUploader {
 
             if (smsSent) {
               console.error('✅ 已发送验证码到您的手机');
-              console.error('\n请输入收到的验证码：');
-
-              // 等待用户输入验证码
-              const readline = await import('readline');
-              const rl = readline.createInterface({
-                input: process.stdin,
-                output: process.stdout
-              });
-
-              const verifyCode = await new Promise<string>((resolve) => {
-                rl.question('验证码: ', (answer) => {
-                  rl.close();
-                  resolve(answer.trim());
-                });
-              });
-
-              // 输入验证码
-              const codeInputs = await page.$$('input[type="text"], input[type="tel"], input[placeholder*="验证码"]');
-              if (codeInputs.length > 0) {
-                // 如果是多个输入框（每位一个框）
-                if (codeInputs.length === 6 || codeInputs.length === 4) {
-                  for (let i = 0; i < verifyCode.length && i < codeInputs.length; i++) {
-                    await codeInputs[i].type(verifyCode[i]);
-                  }
-                } else {
-                  // 单个输入框
-                  await codeInputs[0].type(verifyCode);
-                }
-              }
-
-              // 点击确认按钮
-              await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                const confirmBtn = buttons.find(btn => {
-                  const text = btn.textContent?.trim() || '';
-                  return text.includes('确认') || text.includes('确定') || text.includes('提交') || text === '验证';
-                });
-
-                if (confirmBtn && !confirmBtn.disabled) {
-                  confirmBtn.click();
-                }
-              });
-
-              console.error('✅ 验证码已提交');
-              await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
-
-              // 再次尝试发布
-              await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                const publishBtn = buttons.find(btn => {
-                  const text = btn.textContent?.trim() || '';
-                  return text === '发布' || text === '立即发布' || text.includes('确认发布');
-                });
-
-                if (publishBtn && !publishBtn.disabled) {
-                  publishBtn.click();
-                }
-              });
+            } else {
+              console.error('ℹ️  验证码可能已发送，请查看手机');
             }
+
+            // 无论是否成功点击发送按钮，都等待用户输入验证码
+            console.error('\n请输入收到的验证码：');
+
+            // 等待用户输入验证码
+            const readline = await import('readline');
+            const rl = readline.createInterface({
+              input: process.stdin,
+              output: process.stdout
+            });
+
+            const verifyCode = await new Promise<string>((resolve) => {
+              rl.question('验证码: ', (answer) => {
+                rl.close();
+                resolve(answer.trim());
+              });
+            });
+
+            // 输入验证码
+            const codeInputs = await page.$$('input[type="text"], input[type="tel"], input[placeholder*="验证码"]');
+            if (codeInputs.length > 0) {
+              // 如果是多个输入框（每位一个框）
+              if (codeInputs.length === 6 || codeInputs.length === 4) {
+                for (let i = 0; i < verifyCode.length && i < codeInputs.length; i++) {
+                  await codeInputs[i].type(verifyCode[i]);
+                }
+              } else {
+                // 单个输入框
+                await codeInputs[0].type(verifyCode);
+              }
+            }
+
+            // 点击确认按钮
+            await page.evaluate(() => {
+              const buttons = Array.from(document.querySelectorAll('button'));
+              const confirmBtn = buttons.find(btn => {
+                const text = btn.textContent?.trim() || '';
+                return text.includes('确认') || text.includes('确定') || text.includes('提交') || text === '验证';
+              });
+
+              if (confirmBtn && !confirmBtn.disabled) {
+                confirmBtn.click();
+              }
+            });
+
+            console.error('✅ 验证码已提交');
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
+
+            // 再次尝试发布
+            await page.evaluate(() => {
+              const buttons = Array.from(document.querySelectorAll('button'));
+              const publishBtn = buttons.find(btn => {
+                const text = btn.textContent?.trim() || '';
+                return text === '发布' || text === '立即发布' || text.includes('确认发布');
+              });
+
+              if (publishBtn && !publishBtn.disabled) {
+                publishBtn.click();
+              }
+            });
+
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
           } else {
             // 处理普通确认弹窗
             await page.evaluate(() => {
