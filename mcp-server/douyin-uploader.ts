@@ -102,6 +102,8 @@ export class DouyinUploader {
           // 保存cookies
           const cookies = await page.cookies();
           await fs.writeFile(this.cookiesPath, JSON.stringify(cookies, null, 2));
+          // Restrict cookie file permissions (owner read/write only)
+          await fs.chmod(this.cookiesPath, 0o600).catch(() => {});
 
           await browser.close();
           return {
@@ -482,26 +484,12 @@ export class DouyinUploader {
     if (!headless) {
       const context = browser.defaultBrowserContext();
 
-      // 覆盖所有权限为允许
+      // Only request permissions needed for video upload workflow
       await context.overridePermissions('https://creator.douyin.com', [
-        'geolocation',
-        'notifications',
-        'camera',
-        'microphone',
         'clipboard-read',
         'clipboard-write'
       ]).catch((error) => {
         console.error('Failed to override permissions for creator.douyin.com:',
-          error instanceof Error ? error.message : String(error));
-      });
-
-      await context.overridePermissions('https://www.douyin.com', [
-        'geolocation',
-        'notifications',
-        'camera',
-        'microphone'
-      ]).catch((error) => {
-        console.error('Failed to override permissions for www.douyin.com:',
           error instanceof Error ? error.message : String(error));
       });
     }
