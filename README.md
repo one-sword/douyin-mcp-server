@@ -29,15 +29,15 @@
 git clone https://github.com/lancelin111/douyin-mcp-server.git
 cd douyin-mcp-server
 
-# 2. 安装依赖
-cd mcp-server && npm install && npm run build && cd ..
+# 2. 安装依赖并构建
+npm install && cd mcp-server && npm install && npm run build && cd ..
 
-# 3. 复制 Skills 到 OpenClaw（或 Claude Code）
+# 3. 复制 Skill 到 OpenClaw（或 Claude Code）
 # OpenClaw:
-cp -r skills/* ~/.openclaw/workspace/skills/
+mkdir -p ~/.openclaw/workspace/skills/douyin && cp skills/SKILL.md ~/.openclaw/workspace/skills/douyin/
 
 # Claude Code:
-cp -r skills/* ~/.claude/skills/
+mkdir -p ~/.claude/skills/douyin && cp skills/SKILL.md ~/.claude/skills/douyin/
 ```
 
 ### 验证安装
@@ -63,7 +63,7 @@ npx tsx scripts/manage.ts info
 ```
 或
 ```
-/douyin-login
+/douyin
 ```
 
 **命令行方式：**
@@ -101,10 +101,6 @@ npx tsx scripts/login.ts
 **在 OpenClaw/Claude Code 中：**
 ```
 上传视频 /Users/xxx/video.mp4 到抖音，标题是"我的第一个视频"，标签是"日常,生活"
-```
-或
-```
-/douyin-upload
 ```
 
 **命令行方式：**
@@ -194,41 +190,39 @@ npx tsx scripts/manage.ts clear
 
 ## 📦 Skills 说明
 
-本项目提供 3 个 Skills，符合 [Agent Skills](https://agentskills.io) 开放标准。
+本项目提供一个统一的 Skill，符合 [Agent Skills](https://agentskills.io) 开放标准。
 
-| Skill | 触发命令 | 功能 |
-|-------|---------|------|
-| **douyin-login** | `/douyin-login` 或 "登录抖音" | 登录并保存凭证 |
-| **douyin-upload** | `/douyin-upload` 或 "上传视频到抖音" | 上传视频 |
-| **douyin-manage** | `/douyin-manage` 或 "检查抖音登录" | 管理登录状态 |
+**Skill 名称**：`douyin`
+
+**触发方式**：`/douyin` 或自然语言如 "登录抖音"、"上传视频到抖音"、"检查抖音登录状态"
+
+**功能**：
+- 登录抖音账号并保存凭证
+- 上传视频到抖音（支持标题、描述、标签）
+- 管理登录状态（检查、查看、清除）
 
 ### Skills 目录结构
 
 ```
 skills/
-├── douyin-login/
-│   └── SKILL.md      # 登录技能定义
-├── douyin-upload/
-│   └── SKILL.md      # 上传技能定义
-└── douyin-manage/
-    └── SKILL.md      # 管理技能定义
+└── SKILL.md      # 统一的技能定义文件
 ```
 
 ### 安装到不同平台
 
 **OpenClaw：**
 ```bash
-cp -r skills/* ~/.openclaw/workspace/skills/
+cp skills/SKILL.md ~/.openclaw/workspace/skills/douyin/SKILL.md
 # 然后在 OpenClaw 中输入: refresh skills
 ```
 
 **Claude Code：**
 ```bash
-cp -r skills/* ~/.claude/skills/
+mkdir -p ~/.claude/skills/douyin && cp skills/SKILL.md ~/.claude/skills/douyin/
 ```
 
 **其他支持 Agent Skills 的工具：**
-按照各工具的 Skills 安装方式，将 `skills/` 目录复制到相应位置。
+按照各工具的 Skills 安装方式，将 `skills/SKILL.md` 复制到相应位置。
 
 ---
 
@@ -329,9 +323,7 @@ npx tsx scripts/login.ts
 ```
 douyin-mcp-server/
 ├── skills/                     # Agent Skills 定义
-│   ├── douyin-login/
-│   ├── douyin-upload/
-│   └── douyin-manage/
+│   └── SKILL.md                # 统一的技能定义文件
 ├── scripts/                    # CLI 脚本
 │   ├── login.ts
 │   ├── upload.ts
