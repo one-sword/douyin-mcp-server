@@ -17,6 +17,7 @@ export const CONFIG = {
         NAVIGATION_TIMEOUT: 30000, // 页面导航超时
         FILE_INPUT_TIMEOUT: 10000, // 文件输入框等待超时
         TITLE_INPUT_TIMEOUT: 5000, // 标题输入框等待超时
+        COVER_WAIT: 5000, // 封面设置等待时间
     },
     // 上传等待时间计算 (基于文件大小)
     UPLOAD_WAIT_MULTIPLIER: 1024, // fileSize / UPLOAD_WAIT_MULTIPLIER = 额外等待毫秒数
@@ -206,9 +207,31 @@ export class DouyinUploader {
                 }
             }
             await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+            // 设置封面（必填项）
+            await this.setCover(page);
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
             // 发布
             let published = false;
             if (params.autoPublish !== false) {
+                // 先检查发布按钮是否可用
+                const publishButtonState = await page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('button'));
+                    const publishBtn = buttons.find(btn => {
+                        const text = btn.textContent?.trim() || '';
+                        return text === '发布' || text === '立即发布';
+                    });
+                    if (!publishBtn)
+                        return 'not_found';
+                    if (publishBtn.disabled)
+                        return 'disabled';
+                    return 'enabled';
+                });
+                if (publishButtonState === 'disabled') {
+                    // 发布按钮禁用，可能是封面未设置，再次尝试设置封面
+                    console.error('⚠️  Publish button is disabled, retrying cover setup...');
+                    await this.setCover(page);
+                    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                }
                 published = await page.evaluate(() => {
                     const buttons = Array.from(document.querySelectorAll('button'));
                     const publishBtn = buttons.find(btn => {
@@ -413,6 +436,138 @@ export class DouyinUploader {
         catch (error) {
             console.error('Failed to get user info:', error instanceof Error ? error.message : String(error));
             return 'User';
+        }
+    }
+    async setCover(page) {
+        try {
+            console.error('🖼️  Setting video cover...');
+            // 等待视频处理完成，封面选项才会出现
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
+            // 方法1：尝试点击"选择封面"按钮
+            const coverSet = await page.evaluate(() => {
+                // 查找封面相关的按钮或链接
+                const selectors = [
+                    'button:has-text("选择封面")',
+                    'button:has-text("设置封面")',
+                    'span:has-text("选择封面")',
+                    '[class*="cover"] button',
+                    '[class*="Cover"] button',
+                    'div[class*="cover-select"]',
+                    'div[class*="coverSelect"]'
+                ];
+                // 查找包含"封面"文字的可点击元素
+                const allElements = document.querySelectorAll('button, span, div[role="button"], a');
+                for (const el of allElements) {
+                    const text = el.textContent?.trim() || '';
+                    if (text.includes('选择封面') || text.includes('设置封面') || text.includes('更换封面')) {
+                        el.click();
+                        return 'clicked_cover_button';
+                    }
+                }
+                return 'no_cover_button';
+            });
+            if (coverSet === 'clicked_cover_button') {
+                await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                // 等待封面选择弹窗出现，然后选择第一个推荐封面或视频帧
+                const coverSelected = await page.evaluate(() => {
+                    // 查找封面选择弹窗中的封面选项
+                    const coverOptions = document.querySelectorAll('[class*="cover-item"], [class*="coverItem"], [class*="frame-item"], [class*="frameItem"], ' +
+                        '[class*="cover"] img, [class*="Cover"] img, [class*="thumbnail"], ' +
+                        'div[class*="cover-select"] img, div[class*="cover-list"] > div');
+                    if (coverOptions.length > 0) {
+                        // 点击第一个封面选项
+                        coverOptions[0].click();
+                        return 'selected_cover';
+                    }
+                    // 尝试查找并点击"使用当前帧"或类似按钮
+                    const frameButtons = document.querySelectorAll('button, span');
+                    for (const btn of frameButtons) {
+                        const text = btn.textContent?.trim() || '';
+                        if (text.includes('当前帧') || text.includes('使用此帧') || text.includes('截取封面')) {
+                            btn.click();
+                            return 'used_current_frame';
+                        }
+                    }
+                    return 'no_cover_options';
+                });
+                if (coverSelected !== 'no_cover_options') {
+                    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                    // 点击确认按钮
+                    await page.evaluate(() => {
+                        const confirmButtons = document.querySelectorAll('button');
+                        for (const btn of confirmButtons) {
+                            const text = btn.textContent?.trim() || '';
+                            if (text === '确定' || text === '确认' || text === '完成' || text.includes('使用')) {
+                                btn.click();
+                                return;
+                            }
+                        }
+                    });
+                    console.error('✅ Cover set successfully');
+                    return true;
+                }
+            }
+            // 方法2：尝试直接点击封面区域触发选择
+            const directCoverClick = await page.evaluate(() => {
+                // 查找封面预览区域
+                const coverAreas = document.querySelectorAll('[class*="cover-preview"], [class*="coverPreview"], ' +
+                    '[class*="cover-container"], [class*="coverContainer"], ' +
+                    '[class*="cover-wrap"], [class*="coverWrap"], ' +
+                    'div[class*="cover"]:has(img)');
+                for (const area of coverAreas) {
+                    const rect = area.getBoundingClientRect();
+                    if (rect.width > 50 && rect.height > 50) {
+                        area.click();
+                        return 'clicked_cover_area';
+                    }
+                }
+                return 'no_cover_area';
+            });
+            if (directCoverClick === 'clicked_cover_area') {
+                await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                // 尝试选择第一个可用封面
+                await page.evaluate(() => {
+                    const options = document.querySelectorAll('[class*="cover"] img, [class*="frame"] img');
+                    if (options.length > 0) {
+                        options[0].click();
+                    }
+                });
+                await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                // 确认选择
+                await page.evaluate(() => {
+                    const buttons = document.querySelectorAll('button');
+                    for (const btn of buttons) {
+                        const text = btn.textContent?.trim() || '';
+                        if (text === '确定' || text === '确认' || text === '完成') {
+                            btn.click();
+                            return;
+                        }
+                    }
+                });
+                console.error('✅ Cover set via direct click');
+                return true;
+            }
+            // 方法3：检查是否已有默认封面（有些情况下会自动选择）
+            const hasDefaultCover = await page.evaluate(() => {
+                const coverImages = document.querySelectorAll('[class*="cover"] img, [class*="Cover"] img');
+                for (const img of coverImages) {
+                    const src = img.src;
+                    if (src && !src.includes('placeholder') && !src.includes('default')) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+            if (hasDefaultCover) {
+                console.error('✅ Default cover already set');
+                return true;
+            }
+            console.error('⚠️  Could not auto-set cover, may need manual selection');
+            return false;
+        }
+        catch (error) {
+            console.error('Failed to set cover:', error instanceof Error ? error.message : String(error));
+            return false;
         }
     }
 }
