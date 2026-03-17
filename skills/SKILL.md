@@ -16,13 +16,21 @@ metadata:
 
 自动化上传视频到抖音创作者平台，支持登录、上传和账号管理。
 
+**源代码仓库**: https://github.com/lancelin111/douyin-mcp-server
+
 ## 安装
 
-首次使用需要先安装依赖：
+首次使用需要先克隆项目并安装依赖：
 
 ```bash
+# 克隆源代码（{baseDir} 即为克隆后的目录）
+git clone https://github.com/lancelin111/douyin-mcp-server.git {baseDir}
+
+# 安装依赖并构建
 cd {baseDir} && npm install && cd mcp-server && npm install && npm run build
 ```
+
+> **安全提示**: 建议在安装前审查 [package.json](https://github.com/lancelin111/douyin-mcp-server/blob/main/mcp-server/package.json) 和 [脚本源码](https://github.com/lancelin111/douyin-mcp-server/tree/main/scripts)。
 
 ## 功能一：登录抖音
 
