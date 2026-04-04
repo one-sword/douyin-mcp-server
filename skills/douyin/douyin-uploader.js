@@ -388,6 +388,110 @@ export class DouyinUploader {
             }
         }
     }
+    async dismissKnownPopups(page) {
+        await page.evaluate(() => {
+            const nodes = Array.from(document.querySelectorAll('button, div, span, a'));
+            const target = nodes.find(el => {
+                const text = (el.textContent || '').trim();
+                return text === '我知道了' || text === '知道了';
+            });
+            if (target) {
+                target.click();
+            }
+        }).catch(() => { });
+    }
+    async markImageUploadTrigger(page) {
+        return await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const continueButton = buttons.find(btn => {
+                const text = (btn.textContent || '').replace(/\s+/g, '');
+                return text.includes('继续添加');
+            });
+            if (continueButton && !continueButton.disabled) {
+                continueButton.setAttribute('data-douyin-upload-trigger', '1');
+                return true;
+            }
+            const nodes = Array.from(document.querySelectorAll('div, button, span, label'));
+            const candidates = nodes
+                .map((el) => {
+                const rect = el.getBoundingClientRect();
+                const style = getComputedStyle(el);
+                const text = (el.textContent || '').replace(/\s+/g, '');
+                const className = String(el.className || '');
+                return {
+                    el,
+                    rect,
+                    style,
+                    text,
+                    className,
+                };
+            })
+                .filter(({ rect }) => (rect.x > window.innerWidth * 0.7 &&
+                rect.y < 250 &&
+                rect.width > 180 &&
+                rect.height > 250))
+                .filter(({ text, className, style }) => ((text.includes('点击上传') && text.includes('拖入此区域')) ||
+                (className.includes('content-right') && text.includes('点击上传')) ||
+                (style.cursor === 'pointer' && text.includes('点击上传')) ||
+                (style.borderStyle === 'solid' && text.includes('点击上传'))))
+                .sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height));
+            const target = candidates[0];
+            if (!target) {
+                return false;
+            }
+            target.el.setAttribute('data-douyin-upload-trigger', '1');
+            return true;
+        });
+    }
+    async resetExistingImageDraft(page) {
+        return await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const target = buttons.find(el => {
+                const text = (el.textContent || '').replace(/\s+/g, '');
+                return text.includes('清空并重新上传');
+            });
+            if (!target) {
+                return false;
+            }
+            target.click();
+            return true;
+        });
+    }
+    async waitForImageUploadComplete(page, imageCount) {
+        await page.waitForFunction((expectedCount) => {
+            const text = (document.body.innerText || '').replace(/\s+/g, '');
+            return text.includes('已添加' + expectedCount + '张图片') ||
+                text.includes('继续添加') ||
+                text.includes('清空并重新上传') ||
+                text.includes('预览图文');
+        }, {
+            timeout: Math.max(CONFIG.TIMEOUTS.MIN_UPLOAD_WAIT, imageCount * 5000),
+        }, imageCount);
+    }
+    async uploadImagesByPicker(page, imagePaths) {
+        const existingInput = await page.$('input[type="file"]');
+        if (existingInput) {
+            await existingInput.uploadFile(...imagePaths);
+            return;
+        }
+        let marked = await this.markImageUploadTrigger(page);
+        if (!marked) {
+            const reset = await this.resetExistingImageDraft(page);
+            if (reset) {
+                await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                marked = await this.markImageUploadTrigger(page);
+            }
+        }
+        if (!marked) {
+            throw new Error('Image upload trigger not found');
+        }
+        const chooserPromise = page.waitForFileChooser({
+            timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT,
+        });
+        await page.click('[data-douyin-upload-trigger="1"]');
+        const chooser = await chooserPromise;
+        await chooser.accept(imagePaths);
+    }
     async getPublishButtonState(page) {
         return await page.evaluate(() => {
             const buttons = Array.from(document.querySelectorAll('button'));
@@ -576,16 +680,10 @@ export class DouyinUploader {
                 await browser.close();
                 throw new Error('Login expired. Please login again.');
             }
-            const fileInput = await page.waitForSelector('input[type="file"]', {
-                timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT,
-                visible: false
-            });
-            if (!fileInput) {
-                throw new Error('Upload input not found');
-            }
-            await fileInput.uploadFile(...params.imagePaths);
-            const waitTime = Math.max(CONFIG.TIMEOUTS.MIN_UPLOAD_WAIT, params.imagePaths.length * 3000);
-            await new Promise(r => setTimeout(r, waitTime));
+            await this.dismissKnownPopups(page);
+            await this.uploadImagesByPicker(page, params.imagePaths);
+            await this.waitForImageUploadComplete(page, params.imagePaths.length);
+            await this.dismissKnownPopups(page);
             try {
                 const descInput = await page.$('div[contenteditable="true"]');
                 if (descInput) {
