@@ -1,6 +1,6 @@
-# 抖音视频上传 Skills
+# 抖音视频/图文上传 Skills
 
-让你的 AI 助手能够自动上传视频到抖音创作者平台。支持 [OpenClaw](https://openclaw.ai)、[Claude Code](https://claude.ai/code) 等 AI 工具。
+让你的 AI 助手能够自动上传视频和图文作品到抖音创作者平台。支持 [OpenClaw](https://openclaw.ai)、[Claude Code](https://claude.ai/code) 等 AI 工具。
 
 ---
 
@@ -8,6 +8,10 @@
 
 - [快速开始](#-快速开始)
 - [详细使用流程](#-详细使用流程)
+  - [登录抖音账号](#第一步登录抖音账号)
+  - [上传视频](#第二步上传视频)
+  - [上传图文](#第三步上传图文)
+  - [管理登录状态](#第四步管理登录状态)
 - [Skills 说明](#-skills-说明)
 - [命令行使用](#-命令行使用)
 - [常见问题](#-常见问题)
@@ -150,7 +154,49 @@ npx tsx scripts/upload.ts \
 
 ---
 
-### 第三步：管理登录状态
+### 第三步：上传图文
+
+登录成功后，还可以上传图文作品。
+
+**在 OpenClaw/Claude Code 中：**
+```
+上传图文到抖音，图片是 /Users/xxx/photo1.jpg 和 /Users/xxx/photo2.jpg，描述是"今天的风景真美"，标签是"风景,摄影"
+```
+
+**MCP 工具参数：**
+
+| 参数 | 必需 | 说明 |
+|-----|-----|------|
+| `imagePaths` | ✅ | 图片文件路径数组（1-35 张） |
+| `description` | ✅ | 作品描述 |
+| `title` | ❌ | 作品标题 |
+| `tags` | ❌ | 话题标签数组 |
+| `music` | ❌ | 背景音乐搜索关键词 |
+| `autoPublish` | ❌ | 自动发布（默认 true） |
+
+**支持的图片格式：**
+- JPG / JPEG
+- PNG
+- WebP
+- 单个作品最多 35 张图片
+
+**上传成功输出：**
+```
+✅ Image post upload and publish successful!
+   Title: 今日风景
+   Status: Published
+```
+
+**带背景音乐的图文：**
+```
+上传图文到抖音，图片是 /Users/xxx/photo.jpg，描述是"美好的一天"，背景音乐搜索"轻音乐"
+```
+
+> 💡 **提示**：背景音乐通过关键词搜索匹配，会自动选择第一个搜索结果。如果搜索无结果，会跳过音乐选择继续发布。
+
+---
+
+### 第四步：管理登录状态
 
 定期检查登录状态，避免上传时才发现 Cookie 过期。
 
@@ -201,6 +247,7 @@ npx tsx scripts/manage.ts clear
 **功能**：
 - 登录抖音账号并保存凭证
 - 上传视频到抖音（支持标题、描述、标签）
+- 上传图文到抖音（支持描述、标题、图片、话题、背景音乐）
 - 管理登录状态（检查、查看、清除）
 
 ### Skills 目录结构
@@ -257,6 +304,33 @@ npx tsx scripts/upload.ts --video <路径> --title <标题> [选项]
 | `--tags` | 标签，逗号分隔 |
 | `--headless` | 无头模式 |
 | `--no-publish` | 仅保存草稿 |
+
+### 上传图文
+
+```bash
+npx tsx scripts/upload-images.ts --images <路径1,路径2,...> --description <描述> [选项]
+```
+
+| 选项 | 说明 |
+|-----|------|
+| `--images`, `-i` | 多张图片路径，逗号分隔（与 `--image` 可组合，合计 1-35 张） |
+| `--image` | 单张图片路径（可重复多次） |
+| `--description`, `-d` | 作品描述（**必需**） |
+| `--title`, `-t` | 作品标题（可选） |
+| `--tags` | 话题标签，逗号分隔 |
+| `--music`, `-m` | 背景音乐搜索关键词 |
+| `--headless` | 无头模式 |
+| `--no-publish` | 仅保存草稿 |
+
+**示例：**
+
+```bash
+npx tsx scripts/upload-images.ts -i "/path/a.jpg,/path/b.jpg" -d "今日随拍" --tags "日常,摄影"
+
+npx tsx scripts/upload-images.ts --image ./a.png --image ./b.png -d "周末风景" -t "周末" -m "轻音乐"
+```
+
+> 图文上传此前仅通过 MCP 工具 `douyin_upload_images` 暴露；现已提供与视频脚本对应的 `scripts/upload-images.ts`，便于命令行与自动化场景使用。
 
 ### 管理
 
@@ -318,6 +392,16 @@ npx tsx scripts/login.ts
 - **时长**：15 秒 - 5 分钟
 - **大小**：建议不超过 500MB
 
+### Q: 图文上传支持哪些图片格式？
+
+- **支持**：JPG、JPEG、PNG、WebP
+- **数量**：1-35 张
+- **建议**：使用高清图片，推荐 1080x1920 竖版尺寸
+
+### Q: 图文的背景音乐搜索不到怎么办？
+
+背景音乐是可选功能，搜索不到不会影响发布。可以尝试更换搜索关键词，使用更通用的词汇（如"轻音乐"、"流行"等）。
+
 ---
 
 ## 📁 项目结构
@@ -329,6 +413,7 @@ douyin-mcp-server/
 ├── scripts/                    # CLI 脚本
 │   ├── login.ts
 │   ├── upload.ts
+│   ├── upload-images.ts
 │   └── manage.ts
 ├── mcp-server/                 # 核心代码
 │   ├── douyin-uploader.ts      # 自动化逻辑

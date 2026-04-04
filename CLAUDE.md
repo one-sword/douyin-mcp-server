@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Douyin MCP Server that provides automated video uploading capabilities to Douyin (TikTok China) through the Model Context Protocol. The project consists of two main components:
+This is a Douyin MCP Server that provides automated video and image post uploading capabilities to Douyin (TikTok China) through the Model Context Protocol. The project consists of two main components:
 
 1. **MCP Server** (`mcp-server/`): The core MCP implementation that exposes tools for Douyin automation
 2. **Douyin Uploader** (`mcp-server/douyin-uploader.ts`): The browser automation engine using Puppeteer
@@ -25,6 +25,9 @@ cd mcp-server && npm start
 
 # Run the example upload script
 node examples/simple-upload.js
+
+# CLI: upload image post (1-35 images, description required)
+npx tsx scripts/upload-images.ts --images "./a.jpg,./b.jpg" --description "Caption text"
 ```
 
 ### Project Setup
@@ -42,17 +45,19 @@ cd mcp-server && npm run build
 
 ### Core Components
 
-- **MCP Server** (`mcp-server/index.ts`): Implements the Model Context Protocol server with 5 main tools:
+- **MCP Server** (`mcp-server/index.ts`): Implements the Model Context Protocol server with 6 main tools:
   - `douyin_login`: Opens browser for manual login and saves cookies
   - `douyin_check_login`: Validates saved cookies
   - `douyin_upload_video`: Uploads video with metadata
+  - `douyin_upload_images`: Uploads image post with description, optional title, tags, and background music
   - `douyin_get_cookies`: Shows cookie information
   - `douyin_clear_cookies`: Clears saved login data
 
 - **Douyin Uploader** (`mcp-server/douyin-uploader.ts`): Browser automation class with core methods:
   - `login()`: Handles login flow with timeout
   - `checkLogin()`: Validates existing cookies
-  - `uploadVideo()`: Complete upload workflow including SMS verification
+  - `uploadVideo()`: Complete video upload workflow including SMS verification
+  - `uploadImages()`: Complete image post upload workflow with music selection
   - Cookie persistence and browser session management
 
 ### Key Features
@@ -60,6 +65,7 @@ cd mcp-server && npm run build
 - **Cookie Persistence**: Login sessions saved to `douyin-cookies.json`
 - **Browser Automation**: Puppeteer-based with permission handling
 - **SMS Verification**: Interactive terminal-based verification code input
+- **Image Post Upload**: Supports 1-35 images with description, optional title, tags, and background music search
 - **Error Recovery**: Robust error handling and retry mechanisms
 
 ### Data Flow
@@ -77,6 +83,11 @@ cd mcp-server && npm run build
 │   ├── douyin-uploader.ts         # Core automation logic
 │   ├── package.json               # MCP server dependencies
 │   └── tsconfig.json              # TypeScript config for MCP server
+├── scripts/
+│   ├── login.ts                   # CLI login
+│   ├── upload.ts                  # CLI video upload
+│   ├── upload-images.ts           # CLI image post upload
+│   └── manage.ts                  # CLI cookie / session management
 ├── examples/
 │   └── simple-upload.js           # Usage example
 ├── package.json                   # Root project config
@@ -98,4 +109,7 @@ cd mcp-server && npm run build
 - Browser automation requires Chrome/Chromium (auto-installed by Puppeteer)  
 - Login flow requires manual intervention in browser window
 - Video uploads support automatic publishing or draft saving
+- Image post uploads support 1-35 images (jpg/jpeg/png/webp), description is required, title is optional
+- Background music for image posts is selected by keyword search on the platform
 - SMS verification is handled through terminal input prompts
+- Publish and SMS verification logic is shared between video and image post uploads

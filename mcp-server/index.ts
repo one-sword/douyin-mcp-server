@@ -23,6 +23,16 @@ const UploadVideoArgsSchema = z.object({
   autoPublish: z.boolean().optional().default(true).describe('Automatically click publish button')
 });
 
+const UploadImagesArgsSchema = z.object({
+  imagePaths: z.array(z.string()).min(1).max(35).describe('Paths to image files (1-35 images)'),
+  description: z.string().describe('Description of the image post'),
+  title: z.string().optional().describe('Title of the image post'),
+  tags: z.array(z.string()).optional().describe('Topic tags for the post'),
+  music: z.string().optional().describe('Background music search keyword'),
+  headless: z.boolean().optional().default(false).describe('Run browser in headless mode'),
+  autoPublish: z.boolean().optional().default(true).describe('Automatically click publish button')
+});
+
 const CheckLoginArgsSchema = z.object({
   headless: z.boolean().optional().default(true).describe('Run browser in headless mode')
 });
@@ -118,6 +128,48 @@ class DouyinMCPServer {
             }
           },
           {
+            name: 'douyin_upload_images',
+            description: 'Upload images as a Douyin image post with title, description, topics, and background music',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                imagePaths: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Paths to image files (1-35 images)',
+                  minItems: 1,
+                  maxItems: 35
+                },
+                description: {
+                  type: 'string',
+                  description: 'Description of the image post'
+                },
+                title: {
+                  type: 'string',
+                  description: 'Title of the image post (optional)'
+                },
+                tags: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Topic tags for the post'
+                },
+                music: {
+                  type: 'string',
+                  description: 'Background music search keyword'
+                },
+                headless: {
+                  type: 'boolean',
+                  description: 'Run browser in headless mode (default: false)'
+                },
+                autoPublish: {
+                  type: 'boolean',
+                  description: 'Automatically click publish button (default: true)'
+                }
+              },
+              required: ['imagePaths', 'description']
+            }
+          },
+          {
             name: 'douyin_get_cookies',
             description: 'Get saved cookies information',
             inputSchema: {
@@ -181,6 +233,21 @@ class DouyinMCPServer {
                   type: 'text',
                   text: result.success
                     ? `✅ Video upload ${result.published ? 'and publish' : ''} successful!\nTitle: ${result.title}\nStatus: ${result.status}`
+                    : `❌ Upload failed: ${result.error}`
+                }
+              ]
+            };
+          }
+
+          case 'douyin_upload_images': {
+            const params = UploadImagesArgsSchema.parse(args);
+            const result = await this.uploader.uploadImages(params);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: result.success
+                    ? `✅ Image post upload ${result.published ? 'and publish' : ''} successful!${result.title ? `\nTitle: ${result.title}` : ''}\nStatus: ${result.status}`
                     : `❌ Upload failed: ${result.error}`
                 }
               ]
