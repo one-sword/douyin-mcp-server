@@ -38,10 +38,10 @@ npm install && cd mcp-server && npm install && npm run build && cd ..
 
 # 3. 复制 Skill 到 OpenClaw（或 Claude Code）
 # OpenClaw:
-mkdir -p ~/.openclaw/workspace/skills/douyin && cp skills/SKILL.md ~/.openclaw/workspace/skills/douyin/
+mkdir -p ~/.openclaw/workspace/skills/douyin && cp skills/douyin/SKILL.md ~/.openclaw/workspace/skills/douyin/
 
 # Claude Code:
-mkdir -p ~/.claude/skills/douyin && cp skills/SKILL.md ~/.claude/skills/douyin/
+mkdir -p ~/.claude/skills/douyin && cp skills/douyin/SKILL.md ~/.claude/skills/douyin/
 ```
 
 ### 验证安装
@@ -96,7 +96,7 @@ npx tsx scripts/login.ts
 
 > ⚠️ **注意**：Cookie 有效期约 30 天，过期后需重新登录。
 
-> 📱 **重要提示**：登录成功后，**第一次上传视频需要短信验证**。按提示输入验证码即可。完成一次验证后，之后的上传将完全自动化，无需再次验证。
+> 📱 **重要提示**：登录成功后，**首次发布视频或图文时都可能需要短信验证**。按提示输入验证码即可。完成一次验证后，之后的发布通常将自动完成。
 
 ---
 
@@ -112,6 +112,7 @@ npx tsx scripts/login.ts
 **命令行方式：**
 ```bash
 npx tsx scripts/upload.ts \
+  --type video \
   --video "/Users/xxx/video.mp4" \
   --title "我的第一个视频" \
   --description "这是视频描述" \
@@ -161,6 +162,17 @@ npx tsx scripts/upload.ts \
 **在 OpenClaw/Claude Code 中：**
 ```
 上传图文到抖音，图片是 /Users/xxx/photo1.jpg 和 /Users/xxx/photo2.jpg，描述是"今天的风景真美"，标签是"风景,摄影"
+```
+
+**命令行方式：**
+
+```bash
+npx tsx scripts/upload.ts \
+  --type image \
+  --image "/Users/xxx/photo1.jpg" \
+  --image "/Users/xxx/photo2.jpg" \
+  --description "今天的风景真美" \
+  --tags "风景,摄影"
 ```
 
 **MCP 工具参数：**
@@ -242,7 +254,7 @@ npx tsx scripts/manage.ts clear
 
 **Skill 名称**：`douyin`
 
-**触发方式**：`/douyin` 或自然语言如 "登录抖音"、"上传视频到抖音"、"检查抖音登录状态"
+**触发方式**：`/douyin` 或自然语言如 "登录抖音"、"上传视频到抖音"、"上传图文到抖音"、"检查抖音登录状态"
 
 **功能**：
 - 登录抖音账号并保存凭证
@@ -254,24 +266,25 @@ npx tsx scripts/manage.ts clear
 
 ```
 skills/
-└── SKILL.md      # 统一的技能定义文件
+└── douyin/
+    └── SKILL.md  # 抖音技能定义文件
 ```
 
 ### 安装到不同平台
 
 **OpenClaw：**
 ```bash
-cp skills/SKILL.md ~/.openclaw/workspace/skills/douyin/SKILL.md
+cp skills/douyin/SKILL.md ~/.openclaw/workspace/skills/douyin/SKILL.md
 # 然后在 OpenClaw 中输入: refresh skills
 ```
 
 **Claude Code：**
 ```bash
-mkdir -p ~/.claude/skills/douyin && cp skills/SKILL.md ~/.claude/skills/douyin/
+mkdir -p ~/.claude/skills/douyin && cp skills/douyin/SKILL.md ~/.claude/skills/douyin/
 ```
 
 **其他支持 Agent Skills 的工具：**
-按照各工具的 Skills 安装方式，将 `skills/SKILL.md` 复制到相应位置。
+按照各工具的 Skills 安装方式，将 `skills/douyin/SKILL.md` 复制到相应位置。
 
 ---
 
@@ -292,45 +305,35 @@ npx tsx scripts/login.ts [选项]
 
 ### 上传
 
+统一使用一个上传命令，并通过 `--type` 作为唯一来源明确声明是视频还是图文。
+
 ```bash
-npx tsx scripts/upload.ts --video <路径> --title <标题> [选项]
+npx tsx scripts/upload.ts --type video --video <路径> --title <标题> [选项]
+npx tsx scripts/upload.ts --type image --images <路径1,路径2,...> --description <描述> [选项]
 ```
 
 | 选项 | 说明 |
 |-----|------|
-| `--video` | 视频文件路径（必需） |
-| `--title` | 视频标题（必需） |
-| `--description` | 视频描述 |
-| `--tags` | 标签，逗号分隔 |
-| `--headless` | 无头模式 |
-| `--no-publish` | 仅保存草稿 |
-
-### 上传图文
-
-```bash
-npx tsx scripts/upload-images.ts --images <路径1,路径2,...> --description <描述> [选项]
-```
-
-| 选项 | 说明 |
-|-----|------|
-| `--images`, `-i` | 多张图片路径，逗号分隔（与 `--image` 可组合，合计 1-35 张） |
-| `--image` | 单张图片路径（可重复多次） |
-| `--description`, `-d` | 作品描述（**必需**） |
-| `--title`, `-t` | 作品标题（可选） |
-| `--tags` | 话题标签，逗号分隔 |
-| `--music`, `-m` | 背景音乐搜索关键词 |
+| `--type` | 必填，`video` 或 `image`，作为唯一模式判定来源 |
+| `--video` | 视频文件路径，仅 `--type video` 可用 |
+| `--images`, `-i` | 图文正文图片路径，逗号分隔，仅 `--type image` 可用 |
+| `--image` | 单张图文正文图片路径，可重复，仅 `--type image` 可用 |
+| `--title` | 视频标题（视频模式必需）或图文标题（可选） |
+| `--description` | 视频描述（可选）或图文描述（图文模式必需） |
+| `--tags` | 标签 / 话题标签，逗号分隔 |
+| `--music`, `-m` | 图文背景音乐搜索关键词，仅图文模式可用 |
 | `--headless` | 无头模式 |
 | `--no-publish` | 仅保存草稿 |
 
 **示例：**
 
 ```bash
-npx tsx scripts/upload-images.ts -i "/path/a.jpg,/path/b.jpg" -d "今日随拍" --tags "日常,摄影"
+npx tsx scripts/upload.ts --type video --video "/path/video.mp4" --title "今日视频" --tags "日常,记录"
 
-npx tsx scripts/upload-images.ts --image ./a.png --image ./b.png -d "周末风景" -t "周末" -m "轻音乐"
+npx tsx scripts/upload.ts --type image -i "/path/a.jpg,/path/b.jpg" -d "今日随拍" --tags "日常,摄影"
+
+npx tsx scripts/upload.ts --type image --image ./a.png --image ./b.png -d "周末风景" -t "周末" -m "轻音乐"
 ```
-
-> 图文上传此前仅通过 MCP 工具 `douyin_upload_images` 暴露；现已提供与视频脚本对应的 `scripts/upload-images.ts`，便于命令行与自动化场景使用。
 
 ### 管理
 
@@ -409,11 +412,11 @@ npx tsx scripts/login.ts
 ```
 douyin-mcp-server/
 ├── skills/                     # Agent Skills 定义
-│   └── SKILL.md                # 统一的技能定义文件
+│   └── douyin/
+│       └── SKILL.md            # 抖音技能定义文件
 ├── scripts/                    # CLI 脚本
 │   ├── login.ts
 │   ├── upload.ts
-│   ├── upload-images.ts
 │   └── manage.ts
 ├── mcp-server/                 # 核心代码
 │   ├── douyin-uploader.ts      # 自动化逻辑

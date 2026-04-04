@@ -27,7 +27,7 @@ cd mcp-server && npm start
 node examples/simple-upload.js
 
 # CLI: upload image post (1-35 images, description required)
-npx tsx scripts/upload-images.ts --images "./a.jpg,./b.jpg" --description "Caption text"
+npx tsx scripts/upload.ts --type image --images "./a.jpg,./b.jpg" --description "Caption text"
 ```
 
 ### Project Setup
@@ -85,8 +85,7 @@ cd mcp-server && npm run build
 │   └── tsconfig.json              # TypeScript config for MCP server
 ├── scripts/
 │   ├── login.ts                   # CLI login
-│   ├── upload.ts                  # CLI video upload
-│   ├── upload-images.ts           # CLI image post upload
+│   ├── upload.ts                  # 统一 CLI 上传入口（视频 / 图文）
 │   └── manage.ts                  # CLI cookie / session management
 ├── examples/
 │   └── simple-upload.js           # Usage example
@@ -108,6 +107,7 @@ cd mcp-server && npm run build
 - The MCP server runs as a stdio transport server
 - Browser automation requires Chrome/Chromium (auto-installed by Puppeteer)  
 - Login flow requires manual intervention in browser window
+- CLI upload entry is unified in `scripts/upload.ts`, and `--type` is the only source for deciding video vs image post before dispatching to separate internal flows
 - Video uploads support automatic publishing or draft saving
 - Image post uploads support 1-35 images (jpg/jpeg/png/webp), description is required, title is optional
 - Background music for image posts is selected by keyword search on the platform

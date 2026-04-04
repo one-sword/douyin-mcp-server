@@ -22,6 +22,7 @@ export const CONFIG = {
     // 上传等待时间计算 (基于文件大小)
     UPLOAD_WAIT_MULTIPLIER: 1024, // fileSize / UPLOAD_WAIT_MULTIPLIER = 额外等待毫秒数
 };
+const SUPPORTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 export class DouyinUploader {
     cookiesPath;
     userDataDir;
@@ -375,6 +376,296 @@ export class DouyinUploader {
             return { exists: false };
         }
     }
+    async validateImageFiles(imagePaths) {
+        for (const imgPath of imagePaths) {
+            const stats = await fs.stat(imgPath).catch(() => null);
+            if (!stats || !stats.isFile()) {
+                throw new Error(`Image file not found: ${imgPath}`);
+            }
+            const ext = path.extname(imgPath).toLowerCase();
+            if (!SUPPORTED_IMAGE_EXTENSIONS.includes(ext)) {
+                throw new Error(`Unsupported image format "${ext}" for file: ${imgPath}. Supported: ${SUPPORTED_IMAGE_EXTENSIONS.join(', ')}`);
+            }
+        }
+    }
+    async getPublishButtonState(page) {
+        return await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const publishBtn = buttons.find(btn => {
+                const text = btn.textContent?.trim() || '';
+                return text === '发布' || text === '立即发布';
+            });
+            if (!publishBtn)
+                return 'not_found';
+            if (publishBtn.disabled)
+                return 'disabled';
+            return 'enabled';
+        });
+    }
+    async clickPublishButton(page) {
+        return await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const publishBtn = buttons.find(btn => {
+                const text = btn.textContent?.trim() || '';
+                return text === '发布' || text === '立即发布';
+            });
+            if (publishBtn && !publishBtn.disabled) {
+                publishBtn.click();
+                return true;
+            }
+            return false;
+        });
+    }
+    async handleSmsVerification(page) {
+        const hasSmsVerification = await page.evaluate(() => {
+            const text = document.body.innerText || '';
+            return text.includes('短信验证') || text.includes('验证码') || text.includes('手机验证');
+        });
+        if (!hasSmsVerification) {
+            await page.evaluate(() => {
+                const confirmBtns = document.querySelectorAll('button');
+                for (const btn of confirmBtns) {
+                    const text = btn.textContent || '';
+                    if (text.includes('确认') || text.includes('确定')) {
+                        btn.click();
+                        return;
+                    }
+                }
+            });
+            return;
+        }
+        console.error('\n📱 检测到短信验证页面');
+        const smsSent = await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const sendBtn = buttons.find(btn => {
+                const text = btn.textContent?.trim() || '';
+                return text.includes('发送') || text.includes('获取验证码') || text === '验证';
+            });
+            if (sendBtn && !sendBtn.disabled) {
+                sendBtn.click();
+                return true;
+            }
+            return false;
+        });
+        if (smsSent) {
+            console.error('✅ 已发送验证码到您的手机');
+        }
+        else {
+            console.error('ℹ️  验证码可能已发送，请查看手机');
+        }
+        console.error('\n请输入收到的验证码：');
+        const readline = await import('readline');
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+        const verifyCode = await new Promise((resolve) => {
+            rl.question('验证码: ', (answer) => {
+                rl.close();
+                resolve(answer.trim());
+            });
+        });
+        const codeInputs = await page.$$('input[type="text"], input[type="tel"], input[placeholder*="验证码"]');
+        if (codeInputs.length > 0) {
+            if (codeInputs.length === 6 || codeInputs.length === 4) {
+                for (let i = 0; i < verifyCode.length && i < codeInputs.length; i++) {
+                    await codeInputs[i].type(verifyCode[i]);
+                }
+            }
+            else {
+                await codeInputs[0].type(verifyCode);
+            }
+        }
+        await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const confirmBtn = buttons.find(btn => {
+                const text = btn.textContent?.trim() || '';
+                return text.includes('确认') || text.includes('确定') || text.includes('提交') || text === '验证';
+            });
+            if (confirmBtn && !confirmBtn.disabled) {
+                confirmBtn.click();
+            }
+        });
+        console.error('✅ 验证码已提交');
+        await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
+        await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const publishBtn = buttons.find(btn => {
+                const text = btn.textContent?.trim() || '';
+                return text === '发布' || text === '立即发布' || text.includes('确认发布');
+            });
+            if (publishBtn && !publishBtn.disabled) {
+                publishBtn.click();
+            }
+        });
+    }
+    async selectMusic(page, music) {
+        try {
+            console.error(`🎵 Selecting background music: ${music}`);
+            const musicEntryClicked = await page.evaluate(() => {
+                const allElements = document.querySelectorAll('button, span, div[role="button"], a, div[class*="music"], div[class*="Music"]');
+                for (const el of allElements) {
+                    const text = el.textContent?.trim() || '';
+                    if (text.includes('选择音乐') || text.includes('添加音乐') || text.includes('配乐') || text.includes('背景音乐')) {
+                        el.click();
+                        return true;
+                    }
+                }
+                return false;
+            });
+            if (!musicEntryClicked) {
+                console.error('⚠️  Music selection entry not found, skipping');
+                return false;
+            }
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+            const searchInput = await page.$('input[placeholder*="搜索"], input[placeholder*="音乐"], input[type="search"]');
+            if (searchInput) {
+                await searchInput.click();
+                await searchInput.type(music);
+                await page.keyboard.press('Enter');
+                await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
+                const musicSelected = await page.evaluate(() => {
+                    const musicItems = document.querySelectorAll('[class*="music-item"], [class*="musicItem"], [class*="song-item"], [class*="songItem"], ' +
+                        '[class*="music-list"] > div, [class*="musicList"] > div, [class*="search-result"] > div');
+                    if (musicItems.length > 0) {
+                        const useBtn = musicItems[0].querySelector('button, span[role="button"], div[role="button"]');
+                        if (useBtn) {
+                            useBtn.click();
+                            return true;
+                        }
+                        musicItems[0].click();
+                        return true;
+                    }
+                    return false;
+                });
+                if (musicSelected) {
+                    console.error('✅ Background music selected');
+                    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                    return true;
+                }
+            }
+            console.error('⚠️  Music search failed, continuing without music');
+            await page.keyboard.press('Escape');
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+            return false;
+        }
+        catch (error) {
+            console.error('Failed to select music:', error instanceof Error ? error.message : String(error));
+            await page.keyboard.press('Escape').catch(() => { });
+            return false;
+        }
+    }
+    async uploadImages(params) {
+        let browser = null;
+        try {
+            await this.validateImageFiles(params.imagePaths);
+            const cookiesData = await fs.readFile(this.cookiesPath, 'utf-8');
+            const cookies = JSON.parse(cookiesData);
+            if (!cookies || cookies.length === 0) {
+                throw new Error('No login cookies found. Please login first.');
+            }
+            browser = await this.launchBrowser(params.headless || false);
+            const page = await browser.newPage();
+            await page.setCookie(...cookies);
+            await page.goto('https://creator.douyin.com/creator-micro/content/post/image', {
+                waitUntil: 'networkidle2',
+                timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
+            });
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
+            if (page.url().includes('login')) {
+                await browser.close();
+                throw new Error('Login expired. Please login again.');
+            }
+            const fileInput = await page.waitForSelector('input[type="file"]', {
+                timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT,
+                visible: false
+            });
+            if (!fileInput) {
+                throw new Error('Upload input not found');
+            }
+            await fileInput.uploadFile(...params.imagePaths);
+            const waitTime = Math.max(CONFIG.TIMEOUTS.MIN_UPLOAD_WAIT, params.imagePaths.length * 3000);
+            await new Promise(r => setTimeout(r, waitTime));
+            try {
+                const descInput = await page.$('div[contenteditable="true"]');
+                if (descInput) {
+                    await descInput.click();
+                    await page.keyboard.type(params.description);
+                }
+            }
+            catch (descError) {
+                console.error('Failed to fill description:', descError instanceof Error ? descError.message : String(descError));
+            }
+            if (params.tags && params.tags.length > 0) {
+                const tagText = params.tags.map(tag => `#${tag}`).join(' ');
+                try {
+                    const descInput = await page.$('div[contenteditable="true"]');
+                    if (descInput) {
+                        await descInput.click();
+                        await page.keyboard.type(' ' + tagText);
+                    }
+                }
+                catch (tagError) {
+                    console.error('Failed to add tags:', tagError instanceof Error ? tagError.message : String(tagError));
+                }
+            }
+            if (params.title) {
+                try {
+                    await page.waitForSelector('input[placeholder*="标题"]', { timeout: CONFIG.TIMEOUTS.TITLE_INPUT_TIMEOUT });
+                    await page.click('input[placeholder*="标题"]');
+                    const isMac = process.platform === 'darwin';
+                    const modifierKey = isMac ? 'Meta' : 'Control';
+                    await page.keyboard.down(modifierKey);
+                    await page.keyboard.press('A');
+                    await page.keyboard.up(modifierKey);
+                    await page.keyboard.type(params.title);
+                }
+                catch (titleError) {
+                    console.error('Title input via selector failed, trying fallback method:', titleError instanceof Error ? titleError.message : String(titleError));
+                    await page.evaluate((title) => {
+                        const input = document.querySelector('input[type="text"]');
+                        if (input) {
+                            input.value = title;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    }, params.title);
+                }
+            }
+            if (params.music) {
+                await this.selectMusic(page, params.music);
+            }
+            await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+            let published = false;
+            if (params.autoPublish !== false) {
+                const publishButtonState = await this.getPublishButtonState(page);
+                if (publishButtonState === 'disabled') {
+                    console.error('⚠️  Publish button is disabled, waiting...');
+                    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
+                }
+                published = await this.clickPublishButton(page);
+                if (published) {
+                    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
+                    await this.handleSmsVerification(page);
+                    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
+                }
+            }
+            await browser.close();
+            return {
+                success: true,
+                title: params.title,
+                published,
+                status: published ? 'Published' : 'Draft saved'
+            };
+        }
+        catch (error) {
+            if (browser)
+                await browser.close();
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    }
     async clearData() {
         try {
             await fs.unlink(this.cookiesPath);
@@ -576,4 +867,3 @@ export class DouyinUploader {
         }
     }
 }
-//# sourceMappingURL=douyin-uploader.js.map
