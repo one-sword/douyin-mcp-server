@@ -606,14 +606,110 @@ export class DouyinUploader {
     async selectMusic(page, music) {
         try {
             console.error(`🎵 Selecting background music: ${music}`);
+            await page.waitForFunction(() => {
+                const elements = Array.from(document.querySelectorAll('button, span, div, a'));
+                return elements.some((el) => {
+                    const rect = el.getBoundingClientRect();
+                    const style = getComputedStyle(el);
+                    const className = String(el.className || '');
+                    const text = (el.textContent || '').replace(/\s+/g, '');
+                    return rect.x > window.innerWidth * 0.35 &&
+                        rect.x < window.innerWidth * 0.98 &&
+                        rect.y > 120 &&
+                        rect.y < 650 &&
+                        rect.width > 20 &&
+                        rect.height > 20 &&
+                        style.display !== 'none' &&
+                        style.visibility !== 'hidden' &&
+                        (className.includes('action-') ||
+                            className.includes('container-right') ||
+                            text.includes('选择音乐'));
+                });
+            }, {
+                timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT,
+            }).catch(() => null);
+            const directMusicHandles = await page.$$('span[class*="action-"], div[class*="container-right"]');
+            for (const handle of directMusicHandles) {
+                const box = await handle.boundingBox();
+                if (!box) {
+                    continue;
+                }
+                await handle.click();
+                await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                const directSearchInput = await page.waitForSelector('.music-search-jpUg0G input, [class*="music-search"] input, input[placeholder*="鎼滅储"], input[placeholder*="闊充箰"], input[placeholder*="姝屾洸"], input[type="search"]', { timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT }).catch(() => null);
+                if (!directSearchInput) {
+                    continue;
+                }
+                await directSearchInput.click();
+                await directSearchInput.evaluate((input) => {
+                    input.value = '';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+                await directSearchInput.type(music);
+                await page.keyboard.press('Enter');
+                await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
+                const applyButton = await page.waitForSelector('[class*="music-selector-container"] button[class*="apply-btn"], ' +
+                    '[class*="music-collection-container"] button[class*="apply-btn"]', { timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT }).catch(() => null);
+                if (applyButton) {
+                    await applyButton.evaluate((button) => {
+                        button.click();
+                    });
+                    console.error('鉁?Background music selected');
+                    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+                    return true;
+                }
+                await page.keyboard.press('Escape').catch(() => { });
+            }
             const musicEntryClicked = await page.evaluate(() => {
-                const allElements = document.querySelectorAll('button, span, div[role="button"], a, div[class*="music"], div[class*="Music"]');
-                for (const el of allElements) {
-                    const text = el.textContent?.trim() || '';
-                    if (text.includes('选择音乐') || text.includes('添加音乐') || text.includes('配乐') || text.includes('背景音乐')) {
-                        el.click();
+                const elements = Array.from(document.querySelectorAll('button, span, div, a'));
+                function normalize(value) {
+                    return value.replace(/\s+/g, '');
+                }
+                const exactAction = elements
+                    .map((el) => {
+                    const rect = el.getBoundingClientRect();
+                    return {
+                        el,
+                        rect,
+                        text: normalize(el.textContent || ''),
+                    };
+                })
+                    .filter(({ rect, text }) => (rect.x > window.innerWidth * 0.55 &&
+                    rect.x < window.innerWidth * 0.8 &&
+                    rect.y > 650 &&
+                    rect.y < 800 &&
+                    text.includes('选择音乐')))
+                    .sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height))[0];
+                if (exactAction) {
+                    exactAction.el.click();
+                    return true;
+                }
+                const rowContainer = elements
+                    .map((el) => {
+                    const rect = el.getBoundingClientRect();
+                    return {
+                        el,
+                        rect,
+                        text: normalize(el.textContent || ''),
+                    };
+                })
+                    .filter(({ rect, text }) => (rect.x > window.innerWidth * 0.25 &&
+                    rect.x < window.innerWidth * 0.8 &&
+                    rect.y > 650 &&
+                    rect.y < 800 &&
+                    rect.width > 300 &&
+                    text.includes('点击添加合适作品风格音乐') &&
+                    text.includes('选择音乐')))
+                    .sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height))[0];
+                if (rowContainer) {
+                    const action = Array.from(rowContainer.el.querySelectorAll('button, span, div, a'))
+                        .find((child) => normalize(child.textContent || '').includes('选择音乐'));
+                    if (action) {
+                        action.click();
                         return true;
                     }
+                    rowContainer.el.click();
+                    return true;
                 }
                 return false;
             });
@@ -622,9 +718,13 @@ export class DouyinUploader {
                 return false;
             }
             await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
-            const searchInput = await page.$('input[placeholder*="搜索"], input[placeholder*="音乐"], input[type="search"]');
+            const searchInput = await page.waitForSelector('input[placeholder*="搜索"], input[placeholder*="音乐"], input[placeholder*="歌曲"], input[type="search"]', { timeout: CONFIG.TIMEOUTS.FILE_INPUT_TIMEOUT }).catch(() => null);
             if (searchInput) {
                 await searchInput.click();
+                await searchInput.evaluate((input) => {
+                    input.value = '';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                });
                 await searchInput.type(music);
                 await page.keyboard.press('Enter');
                 await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));

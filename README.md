@@ -30,7 +30,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/lancelin111/douyin-mcp-server.git
+git clone https://github.com/one-sword/douyin-mcp-server.git
 cd douyin-mcp-server
 
 # 2. 安装依赖并构建
@@ -205,6 +205,17 @@ npx tsx scripts/upload.ts \
 ```
 
 > 💡 **提示**：背景音乐通过关键词搜索匹配，会自动选择第一个搜索结果。如果搜索无结果，会跳过音乐选择继续发布。
+
+**遇到短信验证：**
+```
+📱 检测到短信验证页面
+✅ 已发送验证码到您的手机
+
+请输入收到的验证码：
+验证码: 123456
+
+✅ 验证码已提交
+```
 
 ---
 
