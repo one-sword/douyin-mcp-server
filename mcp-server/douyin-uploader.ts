@@ -407,7 +407,26 @@ export class DouyinUploader {
   }
 
   private async launchBrowser(headless: boolean): Promise<Browser> {
-    const browser = await puppeteer.launch({
+    // 支持连接到已存在的 CDP 端点（例如远程浏览器）
+    // CDP_URL 通过 skills.entries.douyin.env.CDP_URL 配置
+    const cdpUrl = process.env.CDP_URL || 'http://localhost:9222';
+    let browser: Browser;
+
+    try {
+      // 优先尝试连接到已存在的浏览器
+      browser = await puppeteer.connect({
+        browserURL: cdpUrl,
+        defaultViewport: headless ? { width: 1400, height: 900 } : null,
+      });
+
+      console.log(`Connected to existing browser at ${cdpUrl}`);
+      return browser;
+    } catch (connectError) {
+      console.log(`Could not connect to ${cdpUrl}, launching new browser...`);
+    }
+
+    // 如果连接失败，则启动新的本地浏览器
+    browser = await puppeteer.launch({
       headless,
       slowMo: headless ? 0 : 50,
       args: [
