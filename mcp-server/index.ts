@@ -33,6 +33,14 @@ const UploadImagesArgsSchema = z.object({
   autoPublish: z.boolean().optional().default(true).describe('Automatically click publish button')
 });
 
+const ContentLikeFavoriteArgsSchema = z.object({
+  url: z.string()
+    .url()
+    .regex(/^https:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/i, 'Content url must be a valid Douyin share link')
+    .describe('Douyin share link, such as https://v.douyin.com/NDxCxSATlMA/'),
+  headless: z.boolean().optional().default(false).describe('Run browser in headless mode')
+});
+
 const CheckLoginArgsSchema = z.object({
   headless: z.boolean().optional().default(true).describe('Run browser in headless mode')
 });
@@ -170,6 +178,24 @@ class DouyinMCPServer {
             }
           },
           {
+            name: 'douyin_like_and_favorite',
+            description: 'Like and favorite a Douyin video or image post by share link',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                url: {
+                  type: 'string',
+                  description: 'Douyin share link, such as https://v.douyin.com/NDxCxSATlMA/'
+                },
+                headless: {
+                  type: 'boolean',
+                  description: 'Run browser in headless mode (default: false)'
+                }
+              },
+              required: ['url']
+            }
+          },
+          {
             name: 'douyin_get_cookies',
             description: 'Get saved cookies information',
             inputSchema: {
@@ -249,6 +275,21 @@ class DouyinMCPServer {
                   text: result.success
                     ? `✅ Image post upload ${result.published ? 'and publish' : ''} successful!${result.title ? `\nTitle: ${result.title}` : ''}\nStatus: ${result.status}`
                     : `❌ Upload failed: ${result.error}`
+                }
+              ]
+            };
+          }
+
+          case 'douyin_like_and_favorite': {
+            const params = ContentLikeFavoriteArgsSchema.parse(args);
+            const result = await this.uploader.likeAndFavorite(params);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: result.success
+                    ? `Like and favorite successful!\nResolved URL: ${result.resolvedUrl}\nLiked: ${result.liked}\nFavorited: ${result.favorited}`
+                    : `Action failed: ${result.error}`
                 }
               ]
             };

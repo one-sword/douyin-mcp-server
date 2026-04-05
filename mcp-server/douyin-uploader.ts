@@ -79,7 +79,28 @@ interface ImagePostResult {
   error?: string;
 }
 
+interface ContentLikeFavoriteParams {
+  url: string;
+  headless?: boolean;
+}
+
+interface ContentLikeFavoriteResult {
+  success: boolean;
+  url: string;
+  resolvedUrl?: string;
+  liked?: boolean;
+  favorited?: boolean;
+  error?: string;
+}
+
+interface InteractionSnapshot {
+  found: boolean;
+  active: boolean;
+  text?: string;
+}
+
 const SUPPORTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+const DOUYIN_SHARE_URL_PATTERN = /^https:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/i;
 
 export class DouyinUploader {
   private cookiesPath: string;
@@ -413,6 +434,14 @@ export class DouyinUploader {
         'clipboard-write'
       ]).catch((error) => {
         console.error('Failed to override permissions for creator.douyin.com:',
+          error instanceof Error ? error.message : String(error));
+      });
+
+      await context.overridePermissions('https://www.douyin.com', [
+        'clipboard-read',
+        'clipboard-write'
+      ]).catch((error) => {
+        console.error('Failed to override permissions for www.douyin.com:',
           error instanceof Error ? error.message : String(error));
       });
     }
@@ -841,7 +870,7 @@ export class DouyinUploader {
 
         if (rowContainer) {
           const action = Array.from(rowContainer.el.querySelectorAll('button, span, div, a'))
-            .find((child) => normalize(child.textContent || '').includes('选择音乐'));
+            .find((child) => (child.textContent || '').replace(/\s+/g, '').includes('选择音乐'));
 
           if (action) {
             (action as HTMLElement).click();
@@ -1060,6 +1089,228 @@ export class DouyinUploader {
         error: error instanceof Error ? error.message : String(error)
       };
     }
+  }
+
+  async likeAndFavorite(params: ContentLikeFavoriteParams): Promise<ContentLikeFavoriteResult> {
+    let browser: Browser | null = null;
+
+    try {
+      this.validateContentUrl(params.url);
+
+      const cookies = await this.loadCookies();
+      browser = await this.launchBrowser(params.headless || false);
+      const page = await browser.newPage();
+
+      await page.setCookie(...cookies);
+
+      const resolvedUrl = await this.resolveContentUrl(page, params.url);
+      await this.ensureContentPageReady(page);
+
+      await this.dismissContentPopups(page);
+      const liked = await this.ensureInteractionActivated(page, 'like');
+      await this.dismissContentPopups(page);
+      const favorited = await this.ensureInteractionActivated(page, 'favorite');
+
+      await browser.close();
+
+      return {
+        success: true,
+        url: params.url,
+        resolvedUrl,
+        liked,
+        favorited,
+      };
+    } catch (error) {
+      if (browser) await browser.close();
+      return {
+        success: false,
+        url: params.url,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  private validateContentUrl(url: string): void {
+    if (!url || !url.trim()) {
+      throw new Error('Content url is required');
+    }
+
+    if (!DOUYIN_SHARE_URL_PATTERN.test(url.trim())) {
+      throw new Error('Content url must be a valid Douyin share link');
+    }
+  }
+
+  private async loadCookies(): Promise<Parameters<Page['setCookie']>> {
+    let cookies: Parameters<Page['setCookie']>;
+
+    try {
+      const cookiesData = await fs.readFile(this.cookiesPath, 'utf-8');
+      cookies = JSON.parse(cookiesData) as Parameters<Page['setCookie']>;
+    } catch (error) {
+      throw new Error('No login cookies found. Please login first.');
+    }
+
+    if (!Array.isArray(cookies) || cookies.length === 0) {
+      throw new Error('No login cookies found. Please login first.');
+    }
+
+    return cookies;
+  }
+
+  private async resolveContentUrl(page: Page, url: string): Promise<string> {
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
+    });
+
+    await page.waitForFunction(() => {
+      return window.location.href.includes('douyin.com') && document.readyState === 'complete';
+    }, {
+      timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
+    }).catch(() => null);
+
+    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
+
+    const resolvedUrl = page.url();
+    if (!resolvedUrl.includes('douyin.com')) {
+      throw new Error('Content page is not available');
+    }
+
+    return resolvedUrl;
+  }
+
+  private async ensureContentPageReady(page: Page): Promise<void> {
+    const currentUrl = page.url();
+    if (currentUrl.includes('login') || currentUrl.includes('passport')) {
+      throw new Error('Login expired. Please login again.');
+    }
+
+    await page.waitForFunction(() => {
+      return Boolean(document.body && document.body.innerText.trim().length > 0);
+    }, {
+      timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
+    }).catch(() => null);
+
+    const issue = await page.evaluate(() => {
+      const text = (document.body?.innerText || '').replace(/\s+/g, '');
+      const blockedTexts = [
+        '内容不存在',
+        '作品不存在',
+        '视频不见了',
+        '暂时无法查看',
+        '作者已设置仅自己可见',
+        '该内容暂时无法访问'
+      ];
+
+      return blockedTexts.find(item => text.includes(item)) || '';
+    });
+
+    if (issue) {
+      throw new Error('Content page is not available');
+    }
+  }
+
+  private async dismissContentPopups(page: Page): Promise<void> {
+    await page.keyboard.press('Escape').catch(() => {});
+
+    await page.evaluate(() => {
+      const closers = ['我知道了', '知道了', '以后再说', '稍后再说', '继续访问', '关闭', '同意', '允许'];
+      const nodes = Array.from(document.querySelectorAll('button, [role="button"], div, span, a'));
+      const target = nodes.find((node) => {
+        const text = (node.textContent || '').replace(/\s+/g, '');
+        return closers.some(item => text === item || text.includes(item));
+      });
+
+      if (target) {
+        (target as HTMLElement).click();
+      }
+    }).catch(() => {});
+
+    await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.FORM_SUBMIT_WAIT));
+  }
+
+  private async ensureInteractionActivated(page: Page, interaction: 'like' | 'favorite'): Promise<boolean> {
+    const initialState = await this.getInteractionSnapshot(page, interaction);
+
+    if (!initialState.found) {
+      throw new Error(interaction === 'like' ? 'Like button not found' : 'Favorite button not found');
+    }
+
+    if (initialState.active) {
+      return true;
+    }
+
+    const clicked = await this.clickInteractionButton(page, interaction);
+    if (!clicked) {
+      throw new Error(interaction === 'like' ? 'Like button not found' : 'Favorite button not found');
+    }
+
+    const expectedState = interaction === 'like' ? 'video-player-is-digged' : 'video-player-is-collected';
+    await page.waitForFunction((kind, state) => {
+      const selector = kind === 'like' ? '[data-e2e="video-player-digg"]' : '[data-e2e="video-player-collect"]';
+      const element = document.querySelector(selector);
+      return element?.getAttribute('data-e2e-state') === state;
+    }, {
+      timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT,
+    }, interaction, expectedState).catch(() => {});
+
+    const finalState = await this.getInteractionSnapshot(page, interaction);
+    if (!finalState.found || !finalState.active) {
+      throw new Error(interaction === 'like' ? 'Like action did not succeed' : 'Favorite action did not succeed');
+    }
+
+    return true;
+  }
+
+  private async getInteractionSnapshot(page: Page, interaction: 'like' | 'favorite'): Promise<InteractionSnapshot> {
+    return await page.evaluate((kind) => {
+      const selector = kind === 'like' ? '[data-e2e="video-player-digg"]' : '[data-e2e="video-player-collect"]';
+      const activeState = kind === 'like' ? 'video-player-is-digged' : 'video-player-is-collected';
+      const inactiveState = kind === 'like' ? 'video-player-no-digged' : 'video-player-no-collect';
+
+      const element = document.querySelector(selector) as HTMLElement | null;
+      if (!element) {
+        return {
+          found: false,
+          active: false,
+        };
+      }
+
+      const isVisible = (element: Element) => {
+        const rect = (element as HTMLElement).getBoundingClientRect();
+        const style = window.getComputedStyle(element as HTMLElement);
+        return rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          style.opacity !== '0';
+      };
+
+      if (!isVisible(element)) {
+        return {
+          found: false,
+          active: false,
+        };
+      }
+
+      const state = element.getAttribute('data-e2e-state') || '';
+      return {
+        found: true,
+        active: state === activeState,
+        text: element.textContent || state || inactiveState,
+      };
+    }, interaction);
+  }
+
+  private async clickInteractionButton(page: Page, interaction: 'like' | 'favorite'): Promise<boolean> {
+    const selector = interaction === 'like' ? '[data-e2e="video-player-digg"]' : '[data-e2e="video-player-collect"]';
+    const handle = await page.$(selector);
+    if (!handle) {
+      return false;
+    }
+
+    await handle.click();
+    return true;
   }
 
   private async setCover(page: Page): Promise<boolean> {

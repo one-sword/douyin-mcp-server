@@ -60,6 +60,7 @@ This tool only accesses official Douyin domains / 本工具仅访问以下抖音
 1. **login.js**: Opens browser → waits for manual login → saves Cookie locally / 打开浏览器 → 等待手动登录 → 保存本地 Cookie
 2. **upload.js**: Unified CLI entry. Uses `--type` as the only mode selector, then dispatches to video upload or image post upload / 统一上传入口。使用 `--type` 作为唯一模式来源，再分发到视频上传或图文上传
 3. **manage.js**: Check, inspect, or clear local login data / 检查、查看或清除本地登录数据
+4. **engage.js**: Like and favorite a Douyin video or image post by share link / 通过抖音分享短链接对视频或图文执行点赞和收藏
 
 ### Dependencies | 依赖
 - **puppeteer**: Browser automation (Chromium) / 浏览器自动化（Chromium）
@@ -81,6 +82,12 @@ Login to Douyin Creator Platform and save credentials locally.
 ```bash
 cd {baseDir} && node scripts/login.js
 ```
+
+**Parameters / 参数：**
+
+| Parameter 参数 | Required 必需 | Description 说明 |
+|-----|-----|------|
+| `--headless` | No 否 | Run browser in headless mode; without it the script runs in headed mode by default |
 
 ## Feature 2: Upload Content | 功能二：统一上传入口
 
@@ -104,6 +111,7 @@ cd {baseDir} && node scripts/upload.js --type video --video "视频路径" --tit
 | `--title` | Yes 是 | Video title / 视频标题 |
 | `--description` | No 否 | Video description / 视频描述 |
 | `--tags` | No 否 | Tags, comma-separated / 标签，逗号分隔 |
+| `--headless` | No 否 | Run browser in headless mode; without it the script runs in headed mode by default |
 | `--no-publish` | No 否 | Save as draft only / 仅保存草稿 |
 
 ### Image post mode | 图文模式
@@ -125,6 +133,7 @@ cd {baseDir} && node scripts/upload.js --type image --images "/path/a.jpg,/path/
 | `--title`, `-t` | No 否 | Post title / 图文标题 |
 | `--tags` | No 否 | Topic tags, comma-separated / 话题标签，逗号分隔 |
 | `--music`, `-m` | No 否 | Music search keyword / 背景音乐搜索关键词 |
+| `--headless` | No 否 | Run browser in headless mode; without it the script runs in headed mode by default |
 | `--no-publish` | No 否 | Save as draft only / 仅保存草稿 |
 
 **Image constraints / 图片限制：**
@@ -173,6 +182,36 @@ cd {baseDir} && node scripts/manage.js info
 cd {baseDir} && node scripts/manage.js clear
 ```
 
+## Feature 4: Like and Favorite Content | 功能四：点赞并收藏内容
+
+Like and favorite a Douyin video or image post by share link.
+通过抖音分享短链接对视频或图文执行点赞和收藏。
+
+```bash
+cd {baseDir} && node scripts/engage.js --url "https://v.douyin.com/NDxCxSATlMA/"
+```
+
+**Parameters | 参数**
+
+| Parameter 参数 | Required 必需 | Description 说明 |
+|-----|-----|------|
+| `--url`, `-u` | Yes 是 | Douyin share link such as `https://v.douyin.com/NDxCxSATlMA/` |
+| `--headless` | No 否 | Run browser in headless mode; without it the script runs in headed mode by default |
+
+**Examples | 示例**
+
+```bash
+cd {baseDir} && node scripts/engage.js --url "https://v.douyin.com/NDxCxSATlMA/"
+cd {baseDir} && node scripts/engage.js -u "https://v.douyin.com/nqKs1FI5CAo/" --headless
+```
+
+**Headless note | 无头参数说明**
+
+- All scripts in this skill run in headed mode by default / 本 skill 下所有脚本默认都是有头模式
+- `--headless` is opt-in only and disables the visible browser window / `--headless` 只在显式传入时生效，并且不会显示浏览器窗口
+- Use `--headless` for MCP, remote automation, or unattended runs / 适合 MCP、远程自动化或无需人工观察页面的场景
+- Do not use `--headless` when you need to scan login QR code or inspect page behavior / 需要扫码登录或排查页面行为时不要使用 `--headless`
+
 ## FAQ | 常见问题
 
 **Q: "Login expired" error? / Q: 提示 "Login expired"？**
@@ -184,6 +223,10 @@ cd {baseDir} && node scripts/login.js
 **Q: SMS verification during publish? / Q: 发布时遇到短信验证？**
 The program will prompt for the verification code automatically.
 程序会自动提示输入验证码。
+
+**Q: When should I use `--headless`? / Q: `--headless` 应该什么时候使用？**
+Use it only when you want fully unattended execution and do not need to watch the page. The default is headed mode for easier login and troubleshooting.
+只有在你希望全自动执行、且不需要观察页面时再使用。默认保持有头模式，更适合登录和排查问题。
 
 **Q: Which image formats are supported? / Q: 图文支持哪些图片格式？**
 `jpg`, `jpeg`, `png`, `webp`, up to 35 images per post.

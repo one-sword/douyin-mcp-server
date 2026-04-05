@@ -1,30 +1,31 @@
-# 抖音视频/图文上传 Skills
+# 抖音视频/图文上传与互动 Skills
 
-让你的 AI 助手能够自动上传视频和图文作品到抖音创作者平台。支持 [OpenClaw](https://openclaw.ai)、[Claude Code](https://claude.ai/code) 等 AI 工具。
+让你的 AI 助手能够自动登录抖音、上传视频、上传图文，并对指定抖音内容执行点赞和收藏。支持 [OpenClaw](https://openclaw.ai)、[Claude Code](https://claude.ai/code) 等 AI 工具。
 
 ---
 
 ## 目录
 
-- [快速开始](#-快速开始)
-- [详细使用流程](#-详细使用流程)
-  - [登录抖音账号](#第一步登录抖音账号)
-  - [上传视频](#第二步上传视频)
-  - [上传图文](#第三步上传图文)
-  - [管理登录状态](#第四步管理登录状态)
-- [Skills 说明](#-skills-说明)
-- [命令行使用](#-命令行使用)
-- [常见问题](#-常见问题)
+- [快速开始](#快速开始)
+- [详细使用流程](#详细使用流程)
+  - [第一步：登录抖音账号](#第一步登录抖音账号)
+  - [第二步：上传视频](#第二步上传视频)
+  - [第三步：上传图文](#第三步上传图文)
+  - [第四步：点赞和收藏指定内容](#第四步点赞和收藏指定内容)
+  - [第五步：管理登录状态](#第五步管理登录状态)
+- [Skills 说明](#skills-说明)
+- [命令行使用](#命令行使用)
+- [常见问题](#常见问题)
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
 ### 前置要求
 
-- **Node.js 18+**：[下载地址](https://nodejs.org/)
-- **Chrome 浏览器**：用于自动化操作
-- **抖音创作者账号**：[注册地址](https://creator.douyin.com/)
+- **Node.js 18+**
+- **Chrome / Chromium 浏览器**
+- **抖音创作者账号**
 
 ### 安装步骤
 
@@ -34,9 +35,11 @@ git clone https://github.com/one-sword/douyin-mcp-server.git
 cd douyin-mcp-server
 
 # 2. 安装依赖并构建
-npm install && cd mcp-server && npm install && npm run build && cd ..
+npm install
+cd mcp-server && npm install && npm run build && cd ..
+cd skills/douyin && npm install && cd ../..
 
-# 3. 复制 Skill 到 OpenClaw（或 Claude Code）
+# 3. 按需复制 Skill 到你的工具目录
 # OpenClaw:
 mkdir -p ~/.openclaw/workspace/skills/douyin && cp skills/douyin/SKILL.md ~/.openclaw/workspace/skills/douyin/
 
@@ -47,414 +50,362 @@ mkdir -p ~/.claude/skills/douyin && cp skills/douyin/SKILL.md ~/.claude/skills/d
 ### 验证安装
 
 ```bash
-# 测试脚本是否可用
-npx tsx scripts/manage.ts info
+cd skills/douyin
+npm run manage -- info
 ```
 
-输出 `No saved cookies found.` 表示安装成功。
+如果输出 `No saved cookies found.`，说明脚本已经可以正常运行。
 
 ---
 
-## 📖 详细使用流程
+## 详细使用流程
 
 ### 第一步：登录抖音账号
 
-首次使用必须先登录，获取并保存登录凭证。
+首次使用前，必须先登录抖音并保存 Cookie。
 
-**在 OpenClaw/Claude Code 中：**
-```
+**在 OpenClaw / Claude Code 中：**
+
+```text
 帮我登录抖音
 ```
-或
-```
+
+或：
+
+```text
 /douyin
 ```
 
 **命令行方式：**
+
 ```bash
-cd douyin-mcp-server
-npx tsx scripts/login.ts
-```
-
-**流程说明：**
-1. 程序会自动打开 Chrome 浏览器
-2. 浏览器显示抖音创作者平台登录页面
-3. **你需要手动完成登录**（扫码或账号密码）
-4. 登录成功后，程序自动保存 Cookie 并关闭浏览器
-5. 终端显示 `✅ Login successful!`
-
-**登录成功输出：**
-```
-🚀 Starting Douyin login...
-   Headless: false
-   Timeout: 180000ms
-
-✅ Login successful!
-   User: 你的抖音昵称
-   Cookies saved: 25
-```
-
-> ⚠️ **注意**：Cookie 有效期约 30 天，过期后需重新登录。
-
-> 📱 **重要提示**：登录成功后，**首次发布视频或图文时都可能需要短信验证**。按提示输入验证码即可。完成一次验证后，之后的发布通常将自动完成。
-
----
-
-### 第二步：上传视频
-
-登录成功后，就可以上传视频了。
-
-**在 OpenClaw/Claude Code 中：**
-```
-上传视频 /Users/xxx/video.mp4 到抖音，标题是"我的第一个视频"，标签是"日常,生活"
-```
-
-**命令行方式：**
-```bash
-npx tsx scripts/upload.ts \
-  --type video \
-  --video "/Users/xxx/video.mp4" \
-  --title "我的第一个视频" \
-  --description "这是视频描述" \
-  --tags "日常,生活,记录"
+cd skills/douyin
+npm run login
 ```
 
 **参数说明：**
 
 | 参数 | 必需 | 说明 |
 |-----|-----|------|
-| `--video` | ✅ | 视频文件的**绝对路径** |
-| `--title` | ✅ | 视频标题（建议 10-30 字） |
-| `--description` | ❌ | 视频描述 |
-| `--tags` | ❌ | 标签，逗号分隔 |
-| `--no-publish` | ❌ | 仅保存草稿，不发布 |
+| `--headless` | 否 | 无头模式；不传时默认有头 |
 
-**上传成功输出：**
-```
-🚀 Starting Douyin upload...
-   Video: /Users/xxx/video.mp4
-   Title: 我的第一个视频
-   Tags: 日常, 生活, 记录
-   Auto-publish: true
+**流程说明：**
 
-✅ Video upload and publish successful!
-   Title: 我的第一个视频
-   Status: Published
-```
+1. 程序会自动打开浏览器
+2. 浏览器进入抖音创作者平台登录页
+3. 你手动完成扫码或账号密码登录
+4. 登录成功后，程序自动保存 Cookie
+5. 终端显示登录成功信息
 
-**遇到短信验证：**
-```
-📱 检测到短信验证页面
-✅ 已发送验证码到您的手机
+> 注意：Cookie 一般有有效期，过期后需要重新登录。
 
-请输入收到的验证码：
-验证码: 123456
-
-✅ 验证码已提交
-```
+> 重要提示：首次发布视频或图文时，平台可能要求短信验证。按提示输入验证码即可。
 
 ---
 
-### 第三步：上传图文
+### 第二步：上传视频
 
-登录成功后，还可以上传图文作品。
+登录成功后，就可以上传视频。
 
-**在 OpenClaw/Claude Code 中：**
-```
-上传图文到抖音，图片是 /Users/xxx/photo1.jpg 和 /Users/xxx/photo2.jpg，描述是"今天的风景真美"，标签是"风景,摄影"
+**在 OpenClaw / Claude Code 中：**
+
+```text
+上传视频 /Users/xxx/video.mp4 到抖音，标题是“我的第一个视频”，标签是“日常,生活”
 ```
 
 **命令行方式：**
 
 ```bash
-npx tsx scripts/upload.ts \
-  --type image \
-  --image "/Users/xxx/photo1.jpg" \
-  --image "/Users/xxx/photo2.jpg" \
-  --description "今天的风景真美" \
-  --tags "风景,摄影"
+cd skills/douyin
+npm run upload -- --type video --video "/Users/xxx/video.mp4" --title "我的第一个视频" --description "这是视频描述" --tags "日常,生活,记录"
 ```
 
-**MCP 工具参数：**
+**常用参数：**
 
 | 参数 | 必需 | 说明 |
 |-----|-----|------|
-| `imagePaths` | ✅ | 图片文件路径数组（1-35 张） |
-| `description` | ✅ | 作品描述 |
-| `title` | ❌ | 作品标题 |
-| `tags` | ❌ | 话题标签数组 |
-| `music` | ❌ | 背景音乐搜索关键词 |
-| `autoPublish` | ❌ | 自动发布（默认 true） |
+| `--type video` | 是 | 指定视频模式 |
+| `--video` | 是 | 视频文件绝对路径 |
+| `--title` | 是 | 视频标题 |
+| `--description` | 否 | 视频描述 |
+| `--tags` | 否 | 标签，逗号分隔 |
+| `--headless` | 否 | 无头模式；不传时默认有头 |
+| `--no-publish` | 否 | 仅保存草稿，不直接发布 |
 
-**支持的图片格式：**
-- JPG / JPEG
-- PNG
-- WebP
-- 单个作品最多 35 张图片
+---
 
-**上传成功输出：**
-```
-✅ Image post upload and publish successful!
-   Title: 今日风景
-   Status: Published
-```
+### 第三步：上传图文
 
-**带背景音乐的图文：**
-```
-上传图文到抖音，图片是 /Users/xxx/photo.jpg，描述是"美好的一天"，背景音乐搜索"轻音乐"
+除了视频，也支持上传图文作品。
+
+**在 OpenClaw / Claude Code 中：**
+
+```text
+上传图文到抖音，图片是 /Users/xxx/photo1.jpg 和 /Users/xxx/photo2.jpg，描述是“今天的风景真美”，标签是“风景,摄影”
 ```
 
-> 💡 **提示**：背景音乐通过关键词搜索匹配，会自动选择第一个搜索结果。如果搜索无结果，会跳过音乐选择继续发布。
+**命令行方式：**
 
-**遇到短信验证：**
+```bash
+cd skills/douyin
+npm run upload -- --type image --image "/Users/xxx/photo1.jpg" --image "/Users/xxx/photo2.jpg" --description "今天的风景真美" --tags "风景,摄影"
 ```
-📱 检测到短信验证页面
-✅ 已发送验证码到您的手机
 
-请输入收到的验证码：
-验证码: 123456
+**常用参数：**
 
-✅ 验证码已提交
+| 参数 | 必需 | 说明 |
+|-----|-----|------|
+| `--type image` | 是 | 指定图文模式 |
+| `--images`, `-i` | 否 | 多张图片路径，逗号分隔 |
+| `--image` | 否 | 单张图片路径，可重复传入 |
+| `--description` | 是 | 图文描述 |
+| `--title` | 否 | 图文标题 |
+| `--tags` | 否 | 话题标签，逗号分隔 |
+| `--music`, `-m` | 否 | 背景音乐搜索关键词 |
+| `--headless` | 否 | 无头模式；不传时默认有头 |
+| `--no-publish` | 否 | 仅保存草稿 |
+
+**图片限制：**
+
+- 支持 `jpg`、`jpeg`、`png`、`webp`
+- 单次最少 1 张，最多 35 张
+
+> 提示：背景音乐通过关键词搜索匹配。如果搜索不到结果，会跳过音乐选择，不影响继续发布。
+
+---
+
+### 第四步：点赞和收藏指定内容
+
+这是新增能力。你可以让工具直接打开指定的抖音短链接，并对该内容执行“点赞 + 收藏”。
+
+**支持的链接格式示例：**
+
+- `https://v.douyin.com/NDxCxSATlMA/`
+- `https://v.douyin.com/nqKs1FI5CAo/`
+- `https://v.douyin.com/_i9pQaZWVuk/`
+
+**在 OpenClaw / Claude Code 中：**
+
+```text
+帮我给这个抖音内容点赞并收藏：https://v.douyin.com/NDxCxSATlMA/
+```
+
+**命令行方式：**
+
+```bash
+cd skills/douyin
+npm run engage -- --url "https://v.douyin.com/NDxCxSATlMA/"
+```
+
+或者：
+
+```bash
+cd skills/douyin
+npm run engage -- -u "https://v.douyin.com/nqKs1FI5CAo/" --headless
+```
+
+**参数说明：**
+
+| 参数 | 必需 | 说明 |
+|-----|-----|------|
+| `--url`, `-u` | 是 | 抖音分享短链接 |
+| `--headless` | 否 | 无头模式；不传时默认有头 |
+
+**行为说明：**
+
+- 只接受 `https://v.douyin.com/.../` 这种抖音分享短链接
+- 会先解析短链接，再进入最终内容页执行动作
+- 目标是确保最终状态为“已点赞 + 已收藏”
+- 如果内容本来就已经点赞或收藏，不会重复点击把状态反过来
+- 同时支持视频内容页和图文内容页
+- 默认使用有头模式，只有显式传 `--headless` 时才使用无头模式
+- 传 `--headless` 后不会弹出浏览器窗口，更适合 MCP、远程环境或纯自动执行
+- 如果你要排查页面是否真的完成了点击，优先不要传 `--headless`
+
+**MCP 调用方式：**
+
+如果你是通过 MCP 客户端调用，工具名是 `douyin_like_and_favorite`，调用示例：
+
+```json
+{
+  "name": "douyin_like_and_favorite",
+  "arguments": {
+    "url": "https://v.douyin.com/NDxCxSATlMA/",
+    "headless": false
+  }
+}
 ```
 
 ---
 
-### 第四步：管理登录状态
+### 第五步：管理登录状态
 
-定期检查登录状态，避免上传时才发现 Cookie 过期。
+建议定期检查登录状态，避免执行上传或互动时才发现 Cookie 已失效。
 
 **检查登录是否有效：**
-```bash
-npx tsx scripts/manage.ts check
-```
 
-输出：
-```
-🔍 Checking login status...
-✅ Cookies are valid. Can auto-login as: 你的昵称
+```bash
+cd skills/douyin
+npm run manage -- check
 ```
 
 **查看 Cookie 信息：**
+
 ```bash
-npx tsx scripts/manage.ts info
+cd skills/douyin
+npm run manage -- info
 ```
 
-输出：
-```
-📋 Cookie information:
-   Count: 25
-   Created: 2024/3/16 22:30:00
-```
+**清除登录数据：**
 
-**清除登录数据（切换账号时使用）：**
 ```bash
-npx tsx scripts/manage.ts clear
-```
-
-输出：
-```
-🗑️  Clearing login data...
-✅ Cookies and browser data cleared successfully.
+cd skills/douyin
+npm run manage -- clear
 ```
 
 ---
 
-## 📦 Skills 说明
+## Skills 说明
 
-本项目提供一个统一的 Skill，符合 [Agent Skills](https://agentskills.io) 开放标准。
+本项目提供一个统一的 `douyin` Skill，适合在支持 Skills 的 AI 工具中直接调用。
 
-**Skill 名称**：`douyin`
+**Skill 名称：** `douyin`
 
-**触发方式**：`/douyin` 或自然语言如 "登录抖音"、"上传视频到抖音"、"上传图文到抖音"、"检查抖音登录状态"
+**典型触发方式：**
 
-**功能**：
-- 登录抖音账号并保存凭证
-- 上传视频到抖音（支持标题、描述、标签）
-- 上传图文到抖音（支持描述、标题、图片、话题、背景音乐）
-- 管理登录状态（检查、查看、清除）
+- “帮我登录抖音”
+- “上传视频到抖音”
+- “上传图文到抖音”
+- “帮我给这个抖音链接点赞并收藏”
+- “检查抖音登录状态”
 
-### Skills 目录结构
+**支持能力：**
 
-```
-skills/
-└── douyin/
-    └── SKILL.md  # 抖音技能定义文件
-```
-
-### 安装到不同平台
-
-**OpenClaw：**
-```bash
-cp skills/douyin/SKILL.md ~/.openclaw/workspace/skills/douyin/SKILL.md
-# 然后在 OpenClaw 中输入: refresh skills
-```
-
-**Claude Code：**
-```bash
-mkdir -p ~/.claude/skills/douyin && cp skills/douyin/SKILL.md ~/.claude/skills/douyin/
-```
-
-**其他支持 Agent Skills 的工具：**
-按照各工具的 Skills 安装方式，将 `skills/douyin/SKILL.md` 复制到相应位置。
+- 登录抖音并保存 Cookie
+- 上传视频到抖音
+- 上传图文到抖音
+- 对指定抖音内容点赞并收藏
+- 检查、查看、清除登录状态
 
 ---
 
-## 🖥️ 命令行使用
-
-不依赖 AI 工具，直接通过命令行使用。
+## 命令行使用
 
 ### 登录
 
 ```bash
-npx tsx scripts/login.ts [选项]
+cd skills/douyin
+npm run login
 ```
-
-| 选项 | 说明 |
-|-----|------|
-| `--headless` | 无头模式（登录时不要用） |
-| `--timeout <ms>` | 超时时间，默认 180000 |
 
 ### 上传
 
-统一使用一个上传命令，并通过 `--type` 作为唯一来源明确声明是视频还是图文。
-
 ```bash
-npx tsx scripts/upload.ts --type video --video <路径> --title <标题> [选项]
-npx tsx scripts/upload.ts --type image --images <路径1,路径2,...> --description <描述> [选项]
+cd skills/douyin
+npm run upload -- --type video --video <路径> --title <标题> [选项]
+npm run upload -- --type image --images <路径1,路径2,...> --description <描述> [选项]
 ```
 
-| 选项 | 说明 |
-|-----|------|
-| `--type` | 必填，`video` 或 `image`，作为唯一模式判定来源 |
-| `--video` | 视频文件路径，仅 `--type video` 可用 |
-| `--images`, `-i` | 图文正文图片路径，逗号分隔，仅 `--type image` 可用 |
-| `--image` | 单张图文正文图片路径，可重复，仅 `--type image` 可用 |
-| `--title` | 视频标题（视频模式必需）或图文标题（可选） |
-| `--description` | 视频描述（可选）或图文描述（图文模式必需） |
-| `--tags` | 标签 / 话题标签，逗号分隔 |
-| `--music`, `-m` | 图文背景音乐搜索关键词，仅图文模式可用 |
-| `--headless` | 无头模式 |
-| `--no-publish` | 仅保存草稿 |
-
-**示例：**
+### 点赞和收藏
 
 ```bash
-npx tsx scripts/upload.ts --type video --video "/path/video.mp4" --title "今日视频" --tags "日常,记录"
-
-npx tsx scripts/upload.ts --type image -i "/path/a.jpg,/path/b.jpg" -d "今日随拍" --tags "日常,摄影"
-
-npx tsx scripts/upload.ts --type image --image ./a.png --image ./b.png -d "周末风景" -t "周末" -m "轻音乐"
+cd skills/douyin
+npm run engage -- --url <抖音短链接>
 ```
 
 ### 管理
 
 ```bash
-npx tsx scripts/manage.ts <命令>
+cd skills/douyin
+npm run manage -- <check|info|clear>
 ```
-
-| 命令 | 说明 |
-|-----|------|
-| `check` | 检查登录状态 |
-| `info` | 查看 Cookie 信息 |
-| `clear` | 清除登录数据 |
 
 ---
 
-## ❓ 常见问题
+## 常见问题
 
-### Q: 浏览器启动失败？
+### Q: 提示 “Login expired” 怎么办？
 
-```bash
-# 重新安装 Chrome
-npx puppeteer browsers install chrome
-```
-
-### Q: 提示 "Login expired"？
-
-Cookie 已过期，需要重新登录：
+Cookie 已失效，重新登录即可：
 
 ```bash
-npx tsx scripts/manage.ts clear
-npx tsx scripts/login.ts
+cd skills/douyin
+npm run manage -- clear
+npm run login
 ```
 
-### Q: 上传卡住不动？
+### Q: 上传时卡住不动怎么办？
 
-1. 检查网络连接
-2. 大文件需要较长时间，请耐心等待
-3. 不使用 `--headless`，观察浏览器状态
+1. 检查网络
+2. 大文件上传本身会比较慢
+3. 不要使用 `--headless`，先观察浏览器页面发生了什么
 
-### Q: 视频上传成功但显示"审核中"？
+### Q: `--headless` 参数到底什么时候用？
 
-这是正常情况，抖音会对视频进行审核，通常几分钟到几小时不等。
+- 所有脚本默认都是有头模式，也就是会打开浏览器窗口
+- 只有显式传 `--headless` 时，才会改成无头模式
+- 适合传 `--headless` 的场景：MCP 调用、远程服务器、自动化批处理、你不需要人工观察页面
+- 不适合传 `--headless` 的场景：登录时需要扫码、首次排查上传/互动失败、你想确认页面到底停在哪一步
 
-### Q: 如何切换抖音账号？
+### Q: 图文支持哪些图片格式？
 
-```bash
-# 1. 清除当前登录
-npx tsx scripts/manage.ts clear
+- `jpg`
+- `jpeg`
+- `png`
+- `webp`
+- 单次最多 35 张
 
-# 2. 重新登录新账号
-npx tsx scripts/login.ts
-```
+### Q: 图文背景音乐搜索不到怎么办？
 
-### Q: 支持哪些视频格式？
+背景音乐是可选功能。搜索不到时会跳过，不影响发布流程。
 
-- **推荐**：MP4
-- **支持**：MOV、AVI
-- **分辨率**：1080x1920（竖屏）或 1920x1080（横屏）
-- **时长**：15 秒 - 5 分钟
-- **大小**：建议不超过 500MB
+### Q: 点赞和收藏支持什么链接？
 
-### Q: 图文上传支持哪些图片格式？
+目前只支持抖音分享短链接，也就是 `https://v.douyin.com/.../` 这种格式。
 
-- **支持**：JPG、JPEG、PNG、WebP
-- **数量**：1-35 张
-- **建议**：使用高清图片，推荐 1080x1920 竖版尺寸
+### Q: 点赞和收藏会不会把已点赞内容取消掉？
 
-### Q: 图文的背景音乐搜索不到怎么办？
+不会。当前逻辑是确保最终状态为“已点赞、已收藏”，如果已经完成，就不会重复点击。
 
-背景音乐是可选功能，搜索不到不会影响发布。可以尝试更换搜索关键词，使用更通用的词汇（如"轻音乐"、"流行"等）。
+### Q: 支持只点赞不收藏吗？
+
+当前不支持。现在的互动能力是固定执行“点赞 + 收藏”组合动作。
 
 ---
 
-## 📁 项目结构
+## 项目结构
 
-```
+```text
 douyin-mcp-server/
-├── skills/                     # Agent Skills 定义
+├── skills/
 │   └── douyin/
-│       └── SKILL.md            # 抖音技能定义文件
-├── scripts/                    # CLI 脚本
-│   ├── login.ts
-│   ├── upload.ts
-│   └── manage.ts
-├── mcp-server/                 # 核心代码
-│   ├── douyin-uploader.ts      # 自动化逻辑
-│   ├── index.ts                # MCP 服务器入口
-│   └── __tests__/              # 单元测试
-├── install.sh                  # 一键安装脚本
-└── README.md
+│       ├── SKILL.md
+│       ├── douyin-uploader.js
+│       └── scripts/
+│           ├── login.js
+│           ├── upload.js
+│           ├── manage.js
+│           └── engage.js
+├── mcp-server/
+│   ├── douyin-uploader.ts
+│   ├── index.ts
+│   └── __tests__/
+├── scripts/
+├── openspec/
+├── README.md
+└── CLAUDE.md
 ```
 
 ---
 
-## ⚠️ 注意事项
+## 注意事项
 
-1. **账号安全**：请勿在公共环境使用，保护好 Cookie 文件
-2. **使用规范**：遵守抖音平台规则，不要频繁发布或发布违规内容
-3. **Cookie 有效期**：约 30 天，定期检查并重新登录
-
----
-
-## 📄 许可证
-
-MIT License
+1. 请妥善保管本地 Cookie 文件
+2. 请遵守抖音平台规则，不要进行违规操作
+3. 点赞和收藏功能依赖当前页面结构，抖音页面大改版后可能需要更新选择器逻辑
 
 ---
 
-## 🔗 相关链接
+## License
 
-- [OpenClaw](https://openclaw.ai) - AI 助手平台
-- [Agent Skills 标准](https://agentskills.io) - 开放标准规范
-- [抖音创作者平台](https://creator.douyin.com/) - 抖音官方
+MIT

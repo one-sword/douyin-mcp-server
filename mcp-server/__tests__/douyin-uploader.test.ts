@@ -28,6 +28,7 @@ vi.mock('puppeteer', () => ({
 // Import after mocks are set up
 import { DouyinUploader } from '../douyin-uploader.js';
 import fs from 'fs/promises';
+import puppeteer from 'puppeteer';
 
 describe('DouyinUploader', () => {
   let uploader: DouyinUploader;
@@ -153,6 +154,64 @@ describe('DouyinUploader', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('No login cookies found');
+    });
+  });
+
+  describe('likeAndFavorite', () => {
+    it('should return error when share link is invalid', async () => {
+      const result = await uploader.likeAndFavorite({
+        url: 'https://example.com/video/123',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('valid Douyin share link');
+    });
+
+    it('should return error when cookies are not found', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+      const result = await uploader.likeAndFavorite({
+        url: 'https://v.douyin.com/NDxCxSATlMA/',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No login cookies found');
+    });
+
+    it('should return structured success result when like and favorite succeed', async () => {
+      const mockPage = {
+        setCookie: vi.fn(),
+      } as any;
+      const mockBrowser = {
+        newPage: vi.fn().mockResolvedValue(mockPage),
+        close: vi.fn().mockResolvedValue(undefined),
+        defaultBrowserContext: vi.fn().mockReturnValue({
+          overridePermissions: vi.fn().mockResolvedValue(undefined),
+        }),
+      } as any;
+
+      vi.spyOn(uploader as any, 'loadCookies').mockResolvedValue([{ name: 'sid', value: '1' }]);
+      vi.spyOn(uploader as any, 'launchBrowser').mockResolvedValue(mockBrowser);
+      vi.spyOn(uploader as any, 'resolveContentUrl').mockResolvedValue('https://www.douyin.com/video/123');
+      vi.spyOn(uploader as any, 'ensureContentPageReady').mockResolvedValue(undefined);
+      vi.spyOn(uploader as any, 'dismissContentPopups').mockResolvedValue(undefined);
+      vi.spyOn(uploader as any, 'ensureInteractionActivated')
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true);
+
+      const result = await uploader.likeAndFavorite({
+        url: 'https://v.douyin.com/NDxCxSATlMA/',
+      });
+
+      expect(result).toEqual({
+        success: true,
+        url: 'https://v.douyin.com/NDxCxSATlMA/',
+        resolvedUrl: 'https://www.douyin.com/video/123',
+        liked: true,
+        favorited: true,
+      });
+      expect(mockPage.setCookie).toHaveBeenCalled();
+      expect(mockBrowser.close).toHaveBeenCalled();
     });
   });
 });
