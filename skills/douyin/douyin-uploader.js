@@ -27,15 +27,17 @@ const DOUYIN_SHARE_URL_PATTERN = /^https:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+\/?(?
 export class DouyinUploader {
     cookiesPath;
     userDataDir;
+    connectedBrowsers = new WeakSet();
     constructor() {
         this.cookiesPath = path.join(__dirname, 'douyin-cookies.json');
         this.userDataDir = path.join(__dirname, 'chrome-user-data');
     }
     async login(headless = false, timeout = 180000) {
         let browser = null;
+        let page = null;
         try {
             browser = await this.launchBrowser(headless);
-            const page = await browser.newPage();
+            page = await browser.newPage();
             // 访问抖音创作者平台
             await page.goto('https://creator.douyin.com', {
                 waitUntil: 'domcontentloaded',
@@ -46,11 +48,7 @@ export class DouyinUploader {
             const startTime = Date.now();
             while (Date.now() - startTime < timeout) {
                 await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.LOGIN_POLL_INTERVAL));
-                const currentUrl = page.url();
-                const isLoggedIn = !currentUrl.includes('/login') &&
-                    !currentUrl.includes('passport') &&
-                    (currentUrl.includes('creator.douyin.com/creator') ||
-                        currentUrl.includes('creator.douyin.com/home'));
+                const isLoggedIn = await this.isLoginFlowCompleted(page);
                 if (isLoggedIn) {
                     // 获取用户信息
                     const user = await this.getUserInfo(page);
@@ -59,7 +57,7 @@ export class DouyinUploader {
                     await fs.writeFile(this.cookiesPath, JSON.stringify(cookies, null, 2));
                     // Restrict cookie file permissions (owner read/write only)
                     await fs.chmod(this.cookiesPath, 0o600).catch(() => { });
-                    await browser.close();
+                    await this.releasePage(page);
                     return {
                         success: true,
                         user,
@@ -67,15 +65,15 @@ export class DouyinUploader {
                     };
                 }
             }
-            await browser.close();
+            await this.releasePage(page);
             return {
                 success: false,
                 error: 'Login timeout'
             };
         }
         catch (error) {
-            if (browser)
-                await browser.close();
+            if (page)
+                await this.releasePage(page);
             return {
                 success: false,
                 error: error instanceof Error ? error.message : String(error)
@@ -84,6 +82,7 @@ export class DouyinUploader {
     }
     async checkLogin(headless = true) {
         let browser = null;
+        let page = null;
         try {
             // 检查cookies文件
             const cookiesData = await fs.readFile(this.cookiesPath, 'utf-8');
@@ -93,30 +92,30 @@ export class DouyinUploader {
             }
             // 测试cookies
             browser = await this.launchBrowser(headless);
-            const page = await browser.newPage();
+            page = await browser.newPage();
             await page.setCookie(...cookies);
             await page.goto('https://creator.douyin.com', {
                 waitUntil: 'networkidle2',
                 timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
             });
             await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.COOKIE_VALIDATION_WAIT));
-            const currentUrl = page.url();
-            const isValid = !currentUrl.includes('login');
+            const isValid = await this.isSessionAuthenticated(page);
             let user = undefined;
             if (isValid) {
                 user = await this.getUserInfo(page);
             }
-            await browser.close();
+            await this.releasePage(page);
             return { isValid, user };
         }
         catch (error) {
-            if (browser)
-                await browser.close();
+            if (page)
+                await this.releasePage(page);
             return { isValid: false };
         }
     }
     async uploadVideo(params) {
         let browser = null;
+        let page = null;
         try {
             // 验证视频文件
             const videoStats = await fs.stat(params.videoPath);
@@ -131,7 +130,7 @@ export class DouyinUploader {
             }
             // 启动浏览器
             browser = await this.launchBrowser(params.headless || false);
-            const page = await browser.newPage();
+            page = await browser.newPage();
             // 设置cookies
             await page.setCookie(...cookies);
             // 访问上传页面
@@ -141,8 +140,8 @@ export class DouyinUploader {
             });
             await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
             // 检查登录状态
-            if (page.url().includes('login')) {
-                await browser.close();
+            if (!(await this.isSessionAuthenticated(page))) {
+                await this.releasePage(page);
                 throw new Error('Login expired. Please login again.');
             }
             // 上传视频
@@ -344,7 +343,7 @@ export class DouyinUploader {
                     await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
                 }
             }
-            await browser.close();
+            await this.releasePage(page);
             return {
                 success: true,
                 title: params.title,
@@ -353,8 +352,8 @@ export class DouyinUploader {
             };
         }
         catch (error) {
-            if (browser)
-                await browser.close();
+            if (page)
+                await this.releasePage(page);
             return {
                 success: false,
                 error: error instanceof Error ? error.message : String(error)
@@ -762,6 +761,7 @@ export class DouyinUploader {
     }
     async uploadImages(params) {
         let browser = null;
+        let page = null;
         try {
             await this.validateImageFiles(params.imagePaths);
             const cookiesData = await fs.readFile(this.cookiesPath, 'utf-8');
@@ -770,15 +770,15 @@ export class DouyinUploader {
                 throw new Error('No login cookies found. Please login first.');
             }
             browser = await this.launchBrowser(params.headless || false);
-            const page = await browser.newPage();
+            page = await browser.newPage();
             await page.setCookie(...cookies);
             await page.goto('https://creator.douyin.com/creator-micro/content/post/image', {
                 waitUntil: 'networkidle2',
                 timeout: CONFIG.TIMEOUTS.NAVIGATION_TIMEOUT
             });
             await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PAGE_LOAD_WAIT));
-            if (page.url().includes('login')) {
-                await browser.close();
+            if (!(await this.isSessionAuthenticated(page))) {
+                await this.releasePage(page);
                 throw new Error('Login expired. Please login again.');
             }
             await this.dismissKnownPopups(page);
@@ -848,7 +848,7 @@ export class DouyinUploader {
                     await new Promise(r => setTimeout(r, CONFIG.TIMEOUTS.PUBLISH_WAIT));
                 }
             }
-            await browser.close();
+            await this.releasePage(page);
             return {
                 success: true,
                 title: params.title,
@@ -857,8 +857,8 @@ export class DouyinUploader {
             };
         }
         catch (error) {
-            if (browser)
-                await browser.close();
+            if (page)
+                await this.releasePage(page);
             return {
                 success: false,
                 error: error instanceof Error ? error.message : String(error)
@@ -867,11 +867,12 @@ export class DouyinUploader {
     }
     async likeAndFavorite(params) {
         let browser = null;
+        let page = null;
         try {
             this.validateContentUrl(params.url);
             const cookies = await this.loadCookies();
             browser = await this.launchBrowser(params.headless || false);
-            const page = await browser.newPage();
+            page = await browser.newPage();
             await page.setCookie(...cookies);
             const resolvedUrl = await this.resolveContentUrl(page, params.url);
             await this.ensureContentPageReady(page);
@@ -879,7 +880,7 @@ export class DouyinUploader {
             const liked = await this.ensureInteractionActivated(page, 'like');
             await this.dismissContentPopups(page);
             const favorited = await this.ensureInteractionActivated(page, 'favorite');
-            await browser.close();
+            await this.releasePage(page);
             return {
                 success: true,
                 url: params.url,
@@ -889,8 +890,8 @@ export class DouyinUploader {
             };
         }
         catch (error) {
-            if (browser)
-                await browser.close();
+            if (page)
+                await this.releasePage(page);
             return {
                 success: false,
                 url: params.url,
@@ -1081,6 +1082,7 @@ export class DouyinUploader {
                 defaultViewport: headless ? { width: 1400, height: 900 } : null,
             });
             console.log(`Connected to existing browser at ${cdpUrl}`);
+            this.connectedBrowsers.add(browser);
             return browser;
         } catch (connectError) {
             console.log(`Could not connect to ${cdpUrl}, launching new browser...`);
@@ -1122,6 +1124,15 @@ export class DouyinUploader {
         }
         return browser;
     }
+    async releasePage(page) {
+        if (this.connectedBrowsers.has(page.browser())) {
+            return;
+        }
+        if (page.isClosed()) {
+            return;
+        }
+        await page.close();
+    }
     async getUserInfo(page) {
         try {
             return await page.evaluate(() => {
@@ -1139,6 +1150,79 @@ export class DouyinUploader {
             console.error('Failed to get user info:', error instanceof Error ? error.message : String(error));
             return 'User';
         }
+    }
+    async hasAuthenticatedCookies(page) {
+        const cookies = await page.cookies();
+        const authCookieNames = new Set([
+            'sessionid',
+            'sessionid_ss',
+            'passport_auth_status',
+            'sid_guard',
+            'uid_tt',
+            'uid_tt_ss',
+        ]);
+        return cookies.some((cookie) => {
+            return authCookieNames.has(cookie.name) && Boolean(cookie.value);
+        });
+    }
+    async hasLoginPrompt(page) {
+        return await page.evaluate(() => {
+            const text = (document.body?.innerText || '').replace(/\s+/g, '');
+            const loginTexts = [
+                '扫码登录',
+                '打开抖音扫码登录',
+                '验证码登录',
+                '手机验证码登录',
+                '密码登录',
+                '同意并登录',
+                '登录后即可发布视频',
+                '登录后即可发布图文',
+                '登录创作服务平台',
+            ];
+            if (loginTexts.some((item) => text.includes(item))) {
+                return true;
+            }
+            const loginSelectors = [
+                'iframe[src*="passport"]',
+                'input[placeholder*="手机号"]',
+                'input[placeholder*="验证码"]',
+                'input[placeholder*="登录"]',
+                '[class*="login"]',
+                '[class*="Login"]',
+                '[data-e2e*="login"]',
+            ];
+            return loginSelectors.some((selector) => {
+                const node = document.querySelector(selector);
+                if (!node) {
+                    return false;
+                }
+                const rect = node.getBoundingClientRect();
+                const style = window.getComputedStyle(node);
+                return rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden';
+            });
+        });
+    }
+    async isSessionAuthenticated(page) {
+        const currentUrl = page.url();
+        if (currentUrl.includes('/login') || currentUrl.includes('passport')) {
+            return false;
+        }
+        if (await this.hasLoginPrompt(page)) {
+            return false;
+        }
+        return await this.hasAuthenticatedCookies(page);
+    }
+    async isLoginFlowCompleted(page) {
+        const currentUrl = page.url();
+        const isCreatorHome = currentUrl.includes('creator.douyin.com/creator') ||
+            currentUrl.includes('creator.douyin.com/home');
+        if (!isCreatorHome) {
+            return false;
+        }
+        return await this.isSessionAuthenticated(page);
     }
     async setCover(page) {
         try {
